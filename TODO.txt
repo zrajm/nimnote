@@ -36,7 +36,7 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
 ** DONE Note should be shown in right mode                              :BUG:
    CLOSED: [2026-10-13 Tue 14:15]
    Always show as fancy, when fancy is set, and as source when source is set.
-* [3/5] Editing of notes
+* [4/5] Editing of notes
 ** DONE Put source in textarea (so it can be modified)
    CLOSED: [2026-10-13 Tue 17:37]
 ** DONE Remove use of 'id' attributes on web page (use 'data-id' instead)
@@ -45,7 +45,10 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
 ** DONE Save note locally (to localStorage)
    CLOSED: [2026-10-14 Wed 06:05]
    Going back and forth between edit & fancy should retain all changes.
-** TODO Save notes to server
+** DONE Re-implement backend in Perl
+   CLOSED: [2026-10-16 Fri 19:25]
+   All API calls now return JSON, and implement all basic calls: `list`, `get`,
+   `create`, `update` and `delete`.
 ** TODO Button for creating new notes
 * [0/16] Frontend
 ** TODO URL should reflect currently loaded note
@@ -129,32 +132,40 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
 ** TODO Set up with HTTPS on internet-facing server
 ** TODO Add README file
 ** TODO Add LICENSE file
-* [0/7] Backend
+* [0/5] Backend
+** [0/10] Verify/clean up new backend
+*** TODO Enable & verify taint mode
+*** TODO Clear %ENV early
+    Assign %ENV variables to internal capitalized variables, then clear %ENV
+    completely.
+    ----------------------------------------
+    my $METHOD = $ENV{REQUEST_METHOD} // 'GET';
+    my $QUERY  = $ENV{QUERY_STRING};
+    ----------------------------------------
+*** TODO On failure, the script should `die()` and handle that
+    The script doesn't really read like Perl. `die()` should be used, and
+    result reasonable server responses.
+*** TODO Saving note should set file mtime
+*** TODO Failing to create uniq id should result in `409 Conflict`
+    For 'create'. Goddamn! This is unlikely!
+*** TODO Bad request should result in `400 Bad Request`
+    Malformed JSON, a body that fails validation, or a query string that does
+    not have a valid `id={id}`.
+*** TODO Operation on non-existing note should result in `404 Not Found`
+    This is true for get/update/delete.
+*** TODO Unknown method should result in `405 Method Not Allowed`
+*** TODO Other error codes?
+    `415 Unsupported Media Type`: the request body is not JSON.
+    `500 Internal Server Error`: any unexpected failure in the server.
+*** TODO Appearance of JSON error messages?
+    I want the messages to be pedagogical, so they can be displayed to end user
+    as-is, verify that this is the case. Rewrite them if necessary.
+
+    Error bodies are JSON objects, such as `{"error": "not_found", "message":
+    "..."}`.
 ** TODO CGI script should support different users
    Lighttpd passes the authenticated username to CGI scripts in as
    `$REMOTE_USER`, along with `$AUTH_TYPE` (which should be 'Basic' here).
-** TODO Add '/api/create' for creating notes
-   Test for uniqueness, so as to not overwrite any note.
-   ----------------------------------------
-   LC_ALL="C"
-
-   # Create 11-char URL-safe base64 string, dash-builtins only.
-   random_id() {
-       local ID CHUNK CHR
-       while [ "${#ID}" -lt 11 ]; do
-           IFS='' read -r CHUNK </dev/urandom
-           while [ -n "$CHUNK" ] && [ "${#ID}" -lt 11 ]; do
-               CHR="${CHUNK%"${CHUNK#?}"}"
-               CHUNK="${CHUNK#?}"
-               case "$CHR" in [a-zA-Z0-9_-]) ID="$ID$CHR"; esac
-           done
-       done
-       printf '%s\n' "$ID"
-   }
-
-   random_id
-   -------------------------------------------------
-** TODO Add '/api/delete' for deleting notes
 ** TODO Cleanup scripts
    Source a central script, just like for Stickynotes? Central config should
    also be there. E.g. a variable specifying the data directory.

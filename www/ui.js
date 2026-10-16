@@ -7,7 +7,7 @@ import './search.js'
 import { updateView } from './view-switcher.js'
 import noteCache from './notecache.js'
 
-function dateStr(epochSec, date = new Date(epochSec * 1000)) {
+function dateStr(epochSec, date = new Date(epochSec)) {
   const x = new Intl.DateTimeFormat('en-US', {
     hour12: false, timeZoneName: 'longOffset',
     year: 'numeric',  month: '2-digit',    day: '2-digit',
@@ -73,9 +73,8 @@ function syncNote(remoteNoteMeta, func) {
     return
   }
   // Get note info from server.
-  fetchText(`./api/get?id=${remoteNoteMeta.id}`)
-    .then(remoteText => {
-      const remoteNote = { ...remoteNoteMeta, text: remoteText }
+  fetchJSON(`./api/notes?id=${remoteNoteMeta.id}`)
+    .then(remoteNote => {
       updateMenuItem(remoteNote, $menuItem, func)
       noteCache.set(remoteNote)
     })
@@ -88,8 +87,8 @@ function updateMenuItem(note, $menuItem, func) {
 }
 
 // On load, fetch note index from server.
-fetchJSON('./api/list').then(reply => {
-  reply.list.forEach((noteInfo, i) => {
+fetchJSON('./api/notes').then(noteList => {
+  noteList.list.forEach((noteInfo, i) => {
     syncNote(noteInfo, i === 0 ? updateView : null)
   })
 }).catch(handleErrors)

@@ -1,0 +1,192 @@
+#!/usr/bin/perl
+# Copyright (c) 2026 by zrajm. License: GPLv2.
+
+# https://perl.com/pub/2012/04/perlunicook-standard-preamble.html
+use utf8;      # so literals and identifiers can be in UTF-8
+use v5.14;     # for locale sorting and "unicode_strings" feature
+use strict;    # quote strings, declare variables
+use warnings;  # on by default
+use warnings  qw(FATAL utf8);            # fatalize encoding glitches
+use open      qw(:std :encoding(utf-8)); # undeclared streams in UTF-8
+use charnames qw(:full :short);          # unneeded in v5.16
+
+use FindBin ();
+use JSON::PP ();
+use MIME::Base64 qw(encode_base64url);
+use Time::HiRes ();
+
+binmode STDIN,  ':raw';
+binmode STDOUT, ':raw';
+
+my ($BIN_DIR)       = $FindBin::Bin =~ /\A(.+)\z/s;
+my $DATA_DIR        = "$BIN_DIR/../data";
+my $NOTE_ID_PATTERN = qr/\A[a-zA-Z0-9_-]{11}\z/;
+my $CREATE_ATTEMPTS = 10;
+my $JSON            = JSON::PP->new->utf8->canonical;
+my %STATUS_TEXT     = (
+    200 => 'OK',                 201 => 'Created',   204 => 'No Content',
+    400 => 'Bad Request',        404 => 'Not Found',
+    405 => 'Method Not Allowed', 409 => 'Conflict',
+    500 => 'Internal Server Error',
+);
+
+eval { handle_request(); 1 } or do {
+    my $error = $@;
+    unless (ref $error eq 'HASH') {
+        warn "notes: $error";
+        $error = {
+            status => 500,
+            error => 'internal_error',
+            message => 'Internal server error',
+        };
+    }
+    reply($error->{status}, {
+        error => $error->{error},
+        message => $error->{message},
+    });
+};
+
+###############################################################################
+
+sub stat {
+    my ($file) = @_;
+    my $mtime = (Time::HiRes::stat($file))[9];
+    return defined $mtime
+        ? int($mtime * 1000 + 0.5)
+        : undef;
+}
+
+sub handle_request {
+    my $id     = requested_id();
+    fail(400, 'bad_request', 'Invalid note id')
+        if defined $id && $id !~ $NOTE_ID_PATTERN;
+    for ($ENV{REQUEST_METHOD} // 'GET') {
+        /^GET$/    && !defined $id && do { list_notes();     last };
+        /^GET$/                    && do { get_note($id);    last };
+        /^PUT$/    &&  defined $id && do { update_note($id); last };
+        /^POST$/   && !defined $id && do { create_note();    last };
+        /^DELETE$/ &&  defined $id && do { delete_note($id); last };
+        fail(405, 'method_not_allowed', 'Method not allowed')
+    }
+}
+
+sub requested_id {
+    my $query = $ENV{QUERY_STRING};
+    return undef unless defined $query && length $query;
+    $query =~ /\Aid=([^&]*)\z/
+        or fail(400, 'bad_request', 'Query string must be id={id}');
+    return $1;
+}
+
+###############################################################################
+
+sub list_notes {
+    opendir my $dir, $DATA_DIR or die "Cannot open $DATA_DIR: $!";
+    my @list = grep { $_ =~ $NOTE_ID_PATTERN } readdir $dir;
+    closedir $dir;
+
+    my @notes;
+    for my $id (@list) {
+        my $updated = main::stat(note_path($id));
+        push @notes, { id => $id, updated => $updated } if defined $updated;
+    }
+    @notes = sort {
+        $b->{updated} <=> $a->{updated} or $a->{id} cmp $b->{id}
+    } @notes;
+    reply(200, { list => \@notes });
+}
+
+sub get_note {
+    my ($id) = @_;
+    reply(200, load_note($id) // fail(404, 'not_found', 'Note not found'));
+}
+
+sub update_note {
+    my ($id) = @_;
+    fail(404, 'not_found', 'Note not found') unless -f note_path($id);
+    my $body = read_body();
+    fail(400, 'bad_request', 'Body id does not match URL id')
+        if exists $body->{id} && $body->{id} ne $id;
+    write_note($id, $body->{text});
+    reply(200, load_note($id));
+}
+
+sub create_note {
+    my $text = read_body()->{text};
+    for (1 .. $CREATE_ATTEMPTS) {
+        my $id = new_note_id();
+        next if -e note_path($id);
+        next unless write_note($id, $text, 1);
+        reply(201, load_note($id));
+        return;
+    }
+    fail(409, 'conflict', 'Could not allocate a unique note id');
+}
+
+sub delete_note {
+    my ($id) = @_;
+    unlink note_path($id) or fail(404, 'not_found', 'Note not found');
+    reply(204);
+}
+
+###############################################################################
+
+sub load_note {
+    my ($id) = @_;
+    my $path = note_path($id);
+    open my $file, '<:encoding(UTF-8)', $path or return undef;
+    my $text = do { local $/; <$file> } // '';
+    close $file;
+    my $updated = main::stat($path) // return undef;
+    return { id => $id, updated => $updated, text => $text };
+}
+
+sub write_note {
+    my ($id, $text, $must_be_new) = @_;
+    my $path = note_path($id);
+    my $temp = "$path.$$.tmp";
+    open my $file, '>:encoding(UTF-8)', $temp or die "Cannot write $temp: $!";
+    print $file $text;
+    close $file or die "Cannot close $temp: $!";
+    if ($must_be_new) {
+        my $created = link($temp, $path);
+        unlink $temp;
+        return $created;
+    }
+    rename $temp, $path or do { unlink $temp; die "Cannot rename $temp: $!" };
+    return 1;
+}
+
+sub read_body {
+    my ($length) = ($ENV{CONTENT_LENGTH} // '0') =~ /^(\d+)$/;
+    fail(400, 'bad_request', 'Request body is required') unless $length > 0;
+    read(STDIN, my $raw, $length);
+    my $body = eval { $JSON->decode($raw) };
+    fail(400, 'bad_request', 'Body must be a JSON object with a string "text"')
+        unless ref $body eq 'HASH' && defined $body->{text} && !ref $body->{text};
+    return $body;
+}
+
+sub new_note_id {
+    open my $random, '<:raw', '/dev/urandom'
+        or die "Cannot open /dev/urandom: $!";
+    read($random, my $bytes, 9) == 9 or die "Cannot read /dev/urandom: $!";
+    close $random;
+    return substr(encode_base64url($bytes), 0, 11);
+}
+
+sub note_path { return "$DATA_DIR/$_[0]" }
+
+sub fail {
+    my ($status, $error, $message) = @_;
+    die +{ status => $status, error => $error, message => $message };
+}
+
+sub reply {
+    my ($status, $data) = @_;
+    print "Status: $status $STATUS_TEXT{$status}\r\n";
+    print "Content-Type: application/json\r\n\r\n";
+    print $JSON->encode($data) if defined $data;
+}
+
+#EOF

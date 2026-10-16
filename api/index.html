@@ -1,0 +1,14 @@
+<!DOCTYPE html><meta charset=utf-8><!--*-js-indent-level:2;css-indent-offset:2-*-->
+<!-- Copyright (c) 2026 by zrajm. License: GPLv2 --><link rel=icon href="data:">
+<noscript><meta http-equiv="refresh" content="5;url=../README-API.md"></noscript>
+<link rel=stylesheet href=/www/nojs.css><textarea id=main hidden></textarea>
+<script>
+  fetch('../README-API.md')
+    .then(x => x.text())
+    .then(md =>
+      // Remove <!-- ... --> around metadata in README.md.
+      main.value = md.replace(/^<!--\s*(\w+:.*)\s+-->$/ms, "$1"))
+</script>
+<script type=module src=/www/scent.js></script>
+<style>table a { white-space: nowrap }</style>
+<!--EOF-->
