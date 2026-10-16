@@ -60,20 +60,20 @@ function getNoteHeading(noteText = '') {
 // left-hand index menu with note data. FIXME: Sync is simplistic, we only
 // check if server timestamp is the same as local timestamp, and if it isn't
 // local note is overwritten by server note.)
-function syncNote(remoteNoteMeta, func) {
+function syncNote(remoteNoteInfo, func) {
   // Insert placeholder for note in index menu.
-  const [$menuItem] = html(`<a data-id="${remoteNoteMeta.id}">`)
+  const [$menuItem] = html(`<a data-id="${remoteNoteInfo.id}">`)
 
   $nav.append($menuItem)
-  const localNote = noteCache.get(remoteNoteMeta.id)
+  const localNote = noteCache.get(remoteNoteInfo.id)
 
   // Get note from cache (if exists and is newer or same as note on server).
-  if (localNote && localNote.updated >= remoteNoteMeta.updated) {
+  if (localNote && localNote.updated >= remoteNoteInfo.updated) {
     updateMenuItem(localNote, $menuItem, func)
     return
   }
   // Get note info from server.
-  fetchJSON(`./api/notes?id=${remoteNoteMeta.id}`)
+  fetchJSON(`./api/notes?id=${remoteNoteInfo.id}`)
     .then(remoteNote => {
       updateMenuItem(remoteNote, $menuItem, func)
       noteCache.set(remoteNote)
