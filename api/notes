@@ -10,7 +10,6 @@ use warnings  qw(FATAL utf8);            # fatalize encoding glitches
 use open      qw(:std :encoding(utf-8)); # undeclared streams in UTF-8
 use charnames qw(:full :short);          # unneeded in v5.16
 
-use FindBin ();
 use JSON::PP ();
 use MIME::Base64 qw(encode_base64url);
 use Time::HiRes ();
@@ -18,12 +17,24 @@ use Time::HiRes ();
 binmode STDIN,  ':raw';
 binmode STDOUT, ':raw';
 
-my ($BIN_DIR)       = $FindBin::Bin =~ /\A(.+)\z/s;
-my $DATA_DIR        = "$BIN_DIR/../data";
-my $NOTE_ID_PATTERN = qr/\A[a-zA-Z0-9_-]{11}\z/;
-my $CREATE_ATTEMPTS = 10;
-my $JSON            = JSON::PP->new->utf8->canonical;
-my %STATUS_TEXT     = (
+# Settings.
+my $CREATE_TRIES = 10;                         # tries for finding unique id
+my $DATA_DIR     = '../data';
+my $FILE_EXT     = '.json';                    # file ext used in data dir
+my $USER_REGEX   = qr/([a-z][a-z0-9-]{1,30})/; # basic auth username
+my $ID_REGEX     = qr/[a-zA-Z0-9_-]{11}/;
+
+# Get settings from environment & clear it.
+my $QUERY_STRING   =  $ENV{QUERY_STRING};
+my $REQUEST_METHOD =  $ENV{REQUEST_METHOD} // 'GET';
+my $CONTENT_LENGTH = ($ENV{CONTENT_LENGTH} // '') =~ /^([1-9]\d*)\z/  ? $1 + 0 : 0;
+my $REMOTE_USER    = ($ENV{REMOTE_USER}    // '') =~ /^$USER_REGEX\z/ ? $1 : '';
+%ENV = ();
+
+# Some defaults.
+my $BIN_DIR     = __FILE__ =~ m#^(.*)/# ? $1 : '';
+my $JSON        = JSON::PP->new->utf8->canonical;
+my %STATUS_TEXT = (
     200 => 'OK',                 201 => 'Created',   204 => 'No Content',
     400 => 'Bad Request',        404 => 'Not Found',
     405 => 'Method Not Allowed', 409 => 'Conflict',
@@ -48,19 +59,22 @@ eval { handle_request(); 1 } or do {
 
 ###############################################################################
 
-sub stat {
-    my ($file) = @_;
-    my $mtime = (Time::HiRes::stat($file))[9];
-    return defined $mtime
-        ? int($mtime * 1000 + 0.5)
-        : undef;
-}
-
 sub handle_request {
-    my $id     = requested_id();
+
+    # Goto data directory.
+    chdir "$BIN_DIR/$DATA_DIR"
+        or fail(400, 'bad_request', 'Missing data dir on server');
+
+    # FIXME RE-ENABLE -- if dir doesn't exist, error out
+    # if ($REMOTE_USER) {
+    #     chdir $REMOTE_USER
+    #         or fail(400, 'bad_request', "Missing user dir '$REMOTE_USER' on server");
+    # }
+
+    my $id = requested_id();
     fail(400, 'bad_request', 'Invalid note id')
-        if defined $id && $id !~ $NOTE_ID_PATTERN;
-    for ($ENV{REQUEST_METHOD} // 'GET') {
+        if defined $id && $id !~ /^$ID_REGEX\z/;
+    for ($REQUEST_METHOD) {
         /^GET$/    && !defined $id && do { list_notes();     last };
         /^GET$/                    && do { get_note($id);    last };
         /^PUT$/    &&  defined $id && do { update_note($id); last };
@@ -71,94 +85,153 @@ sub handle_request {
 }
 
 sub requested_id {
-    my $query = $ENV{QUERY_STRING};
+    my $query = $QUERY_STRING;
     return undef unless defined $query && length $query;
-    $query =~ /\Aid=([^&]*)\z/
+    $query =~ /^id=([^&]*)\z/
         or fail(400, 'bad_request', 'Query string must be id={id}');
     return $1;
 }
 
 ###############################################################################
 
+# List all notes ('id' and 'updated' are included in list).
 sub list_notes {
-    opendir my $dir, $DATA_DIR or die "Cannot open $DATA_DIR: $!";
-    my @list = grep { $_ =~ $NOTE_ID_PATTERN } readdir $dir;
-    closedir $dir;
-
-    my @notes;
-    for my $id (@list) {
-        my $updated = main::stat(note_path($id));
-        push @notes, { id => $id, updated => $updated } if defined $updated;
-    }
-    @notes = sort {
+    my $file_regex = qr/^(($ID_REGEX)\Q$FILE_EXT\E)\z/;
+    my @list = sort {
+        # Reverse 'update', then alphabetical 'id'.
         $b->{updated} <=> $a->{updated} or $a->{id} cmp $b->{id}
-    } @notes;
-    reply(200, { list => \@notes });
+    } map {
+        my ($file, $id) = /$file_regex/;
+        defined($id)
+            ? { id => $id, updated => millistat($file) }
+            : ();
+    } read_dir($DATA_DIR);
+    reply(200, { list => \@list });
 }
 
+# Get all values of single note.
 sub get_note {
     my ($id) = @_;
-    reply(200, load_note($id) // fail(404, 'not_found', 'Note not found'));
+    my $note = read_note($id) // fail(404, 'not_found', 'Note not found');
+    reply(200, $note);
 }
 
+# Overwrite note with new values ('id' must be same in request URL & body).
 sub update_note {
     my ($id) = @_;
-    fail(404, 'not_found', 'Note not found') unless -f note_path($id);
     my $body = read_body();
-    fail(400, 'bad_request', 'Body id does not match URL id')
-        if exists $body->{id} && $body->{id} ne $id;
-    write_note($id, $body->{text});
-    reply(200, load_note($id));
+    fail(400, 'bad_request', "Body 'id' required") unless exists $body->{id};
+    fail(400, 'bad_request', "Body & URL 'id' values must be same")
+        if $body->{id} ne $id;
+    fail(404, 'not_found', 'Note not found') unless -f note_path($id);
+    write_note($body);
+    reply(200, $body);
 }
 
+# Create note (assigns random 'id', returned in response).
 sub create_note {
-    my $text = read_body()->{text};
-    for (1 .. $CREATE_ATTEMPTS) {
+    my $body = read_body();
+    fail(400, 'bad_request', "Body 'id' not allowed") if exists $body->{id};
+    for (1 .. $CREATE_TRIES) {
         my $id = new_note_id();
-        next if -e note_path($id);
-        next unless write_note($id, $text, 1);
-        reply(201, load_note($id));
+        next if -e note_path($id);             # note already exists
+        my $new_body = { %$body, id => $id };
+        write_note($new_body, 1) or next;
+        reply(201, $new_body);
         return;
     }
     fail(409, 'conflict', 'Could not allocate a unique note id');
 }
 
+# Delete note.
 sub delete_note {
     my ($id) = @_;
-    unlink note_path($id) or fail(404, 'not_found', 'Note not found');
+    unlink(note_path($id)) or fail(404, 'not_found', 'Note not found');
     reply(204);
 }
 
 ###############################################################################
 
-sub load_note {
-    my ($id) = @_;
-    my $path = note_path($id);
-    open my $file, '<:encoding(UTF-8)', $path or return undef;
-    my $text = do { local $/; <$file> } // '';
-    close $file;
-    my $updated = main::stat($path) // return undef;
-    return { id => $id, updated => $updated, text => $text };
+# Get the current moment in milliseconds since epoch (Javascript style).
+sub millinow { int(Time::HiRes::time() * 1000) }
+
+# FIXME: Die on error
+# Stat file mtime, get milliseconds since epoch (Javascript style).
+sub millistat {
+    my ($file) = @_;
+    my @stat = Time::HiRes::stat($file) or return ();
+    return int($stat[9] * 1000);
 }
 
-sub write_note {
-    my ($id, $text, $must_be_new) = @_;
+# Set file mtime using milliseconds (= Javascript standard).
+sub millitouch {
+    my ($file, $ms) = @_;
+    die "millitouch: missing timestamp" unless defined $ms;
+
+    my $t = $ms / 1000;              # ms -> fractional epoch seconds
+    Time::HiRes::utime($t, $t, $file)
+        or die "millitouch: can't set mtime on $file: $!";
+    return 1;
+}
+
+# Get list of files in a directory.
+sub read_dir {
+    my ($dir) = @_;
+    opendir(my $dh, $dir) or die "Can't open dir '$dir' for reading: $!\n";
+    my @list = readdir($dh);
+    closedir($dh) or die "Can't close dir '$dir' after reading: $!\n";
+    return @list;
+}
+
+# Read file, return string.
+sub read_file {
+    my ($file) = @_;
+    open(my $fh, '<:encoding(UTF-8)', $file)
+        or die "Can't open file '$file' for reading: $!\n";
+    my $data = do { local $/; <$fh> };
+    close($fh) or die "Can't close file '$file' after reading: $!\n";
+    return $data;
+}
+
+# Write string to file.
+sub write_file {
+    my ($file, $data) = @_;
+    open(my $fh, '>:encoding(UTF-8)', $file)
+        or die "Can't open file '$file' for writing: $!\n";
+    print $fh $data;
+    close($fh) or die "Can't close file '$file' after writing: $!\n"
+}
+
+sub read_note {
+    my ($id) = @_;
     my $path = note_path($id);
+    my $data = read_file($path);
+    return eval { $JSON->decode($data) };
+}
+
+# Write note & touch file to reflect 'updated' value.
+sub write_note {
+    my ($body, $must_be_new) = @_;
+    my $path = note_path($body->{id});
     my $temp = "$path.$$.tmp";
-    open my $file, '>:encoding(UTF-8)', $temp or die "Cannot write $temp: $!";
-    print $file $text;
-    close $file or die "Cannot close $temp: $!";
+    write_file($temp, $JSON->encode($body));
+    millitouch($temp, $body->{updated}) if $body->{updated};
+
+    # FIXME: Verify this logic stuff
     if ($must_be_new) {
-        my $created = link($temp, $path);
-        unlink $temp;
+        my $created = link($temp, $path);      # returns true/false
+        unlink($temp);
         return $created;
     }
-    rename $temp, $path or do { unlink $temp; die "Cannot rename $temp: $!" };
+    rename($temp, $path) or do {
+        unlink($temp);
+        die "Can't rename file '$temp': $!";
+    };
     return 1;
 }
 
 sub read_body {
-    my ($length) = ($ENV{CONTENT_LENGTH} // '0') =~ /^(\d+)$/;
+    my $length = $CONTENT_LENGTH;
     fail(400, 'bad_request', 'Request body is required') unless $length > 0;
     read(STDIN, my $raw, $length);
     my $body = eval { $JSON->decode($raw) };
@@ -169,13 +242,13 @@ sub read_body {
 
 sub new_note_id {
     open my $random, '<:raw', '/dev/urandom'
-        or die "Cannot open /dev/urandom: $!";
-    read($random, my $bytes, 9) == 9 or die "Cannot read /dev/urandom: $!";
+        or die "Can't open /dev/urandom: $!";
+    read($random, my $bytes, 9) == 9 or die "Can't read /dev/urandom: $!";
     close $random;
     return substr(encode_base64url($bytes), 0, 11);
 }
 
-sub note_path { return "$DATA_DIR/$_[0]" }
+sub note_path { shift() . $FILE_EXT }
 
 sub fail {
     my ($status, $error, $message) = @_;
@@ -183,10 +256,10 @@ sub fail {
 }
 
 sub reply {
-    my ($status, $data) = @_;
+    my ($status, $body) = @_;
     print "Status: $status $STATUS_TEXT{$status}\r\n";
     print "Content-Type: application/json\r\n\r\n";
-    print $JSON->encode($data) if defined $data;
+    print $JSON->encode($body) if defined $body;
 }
 
 #EOF

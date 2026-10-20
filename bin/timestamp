@@ -1,0 +1,62 @@
+#!/bin/dash
+# Copyright (c) 2026 by zrajm. License: GPLv2.
+#
+# This script will read the 'updated' value of all specified JSON files, and
+# set the file's timestamp to reflect that. -- This timestamp is used by the
+# `list` API call to be able list files in newest-first order.
+#
+# The 'updated' value is expected to be an epoch time value expressed in
+# milliseconds, same format as the retuned value from Javascript's
+# `Date.now()`. -- This resolution is lower that the ext4 filesystem's
+# nanosecond resolution (so the time filestamp should always will end in six
+# zeroes).
+#
+# List files with:
+#
+# ls -l --time-style='+%_10s.%N' *.json
+#
+
+echo() { printf '%s\n' "$@"; }
+warn() { echo "$@" >&2; }
+progress() { printf "  %s\e[K\r" "$@"; }
+clear_progress() { printf '\e[K'; }
+
+BAD=0
+ERR=0
+for FILE in "$@"; do
+    shift;
+    progress "$FILE ($# files to check)"
+
+    # Read 'updated' JSON value from file.
+    # (It's a Javascript default milliseconds since epoch.)
+    JSON_MS="$(jq -r '.updated' $FILE 2>/dev/null)" # milliseconds
+    if [ "$?" -ne 0 ]; then
+        warn "$FILE: Not a JSON file"
+        ERR="$(( ERR + 1 ))"
+        continue
+    fi
+
+    # Read filesystem mtime.
+    FILE_NS="$(date -r "$FILE" +"%s%09N")"     # nanoseconds
+
+    # Strip six trailing zeroes to make it milliseconds.
+    # (Will fail if last digits aren't zeroes.)
+    FILE_MS="${FILE_NS%000000}"
+
+    if [ "$JSON_MS" != "$FILE_MS" ]; then
+        BAD="$(( BAD + 1 ))"
+        clear_progress
+        echo "$FILE: Change file timestamp to JSON 'updated' value"
+        TIMESTAMP="$(printf '%d.%03d' $(( JSON_MS / 1000 )) $(( JSON_MS % 1000 )))"
+        touch -d"@$TIMESTAMP" "$FILE"
+    fi
+done
+clear_progress
+if [ "$BAD" -eq 0 ] && [ "$ERR" -eq 0 ]; then
+    echo 'All file timestamps are good'
+else
+    echo "$BAD files updated with new timestamps"
+fi
+[ "$ERR" -ne 0 ] && echo "$ERR files failed to parse"
+
+#EOF

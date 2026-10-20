@@ -1,7 +1,7 @@
 -*- org -*-
 Copyright (c) 2026 by zrajm. License: GPLv2.
 
-* [12/12] DONE
+* [23/23] DONE
 ** DONE Save note content in localStorage on load
    CLOSED: [2026-10-07 Wed 15:59]
 ** DONE Don't fetch note on init if already in localStorage
@@ -36,7 +36,6 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
 ** DONE Note should be shown in right mode                              :BUG:
    CLOSED: [2026-10-13 Tue 14:15]
    Always show as fancy, when fancy is set, and as source when source is set.
-* [4/5] Editing of notes
 ** DONE Put source in textarea (so it can be modified)
    CLOSED: [2026-10-13 Tue 17:37]
 ** DONE Remove use of 'id' attributes on web page (use 'data-id' instead)
@@ -49,7 +48,47 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
    CLOSED: [2026-10-16 Fri 19:25]
    All API calls now return JSON, and implement all basic calls: `list`, `get`,
    `create`, `update` and `delete`.
+** DONE Store data as JSON on server side
+   CLOSED: [2026-10-20 Tue 11:45]
+   This allows for storing a 'created' field (and other field might be wanted
+   in the future).
+** DONE Don't unnecessarily read note files
+   CLOSED: [2026-10-20 Tue 11:45]
+   When updating, just send back the received note instead of reading the file
+   and returning it.
+** DONE Clear %ENV early
+   CLOSED: [2026-10-20 Tue 11:45]
+   Assign %ENV variables to internal capitalized variables, then clear %ENV
+   completely.
+   ----------------------------------------
+   my $METHOD = $ENV{REQUEST_METHOD} // 'GET';
+   my $QUERY  = $ENV{QUERY_STRING};
+   ----------------------------------------
+
+   CONTENT_LENGTH
+   QUERY_STRING
+   REMOTE_USER
+   REQUEST_METHOD
+** DONE Remove convenience opts for running from command line
+   CLOSED: [2026-10-20 Tue 11:45]
+   Docs should describe how to access using curl, and/or setting environment
+   variables and piping in input.
+** DONE Support arbitrary properties in server storage
+   CLOSED: [2026-10-20 Tue 11:45]
+** DONE Verify that payload ID and URL id is the same
+   CLOSED: [2026-10-20 Tue 11:45]
+   Only relevant in `update_note()` (no other API call has `id` in both URL &
+   body).
+** DONE Saving note should set file mtime
+   CLOSED: [2026-10-20 Tue 11:45]
+* [0/3] Editing of notes
+** TODO Verify return values by checking for shebang
+   No value from server should start with `#!` (not list, not get, or any
+   other).
+   Not just the `list` call.
+   'Misconfigured server: API call returned source code'
 ** TODO Button for creating new notes
+** TODO Menu: Delete note, show API docs(?)
 * [0/16] Frontend
 ** TODO URL should reflect currently loaded note
    This should work to link to a specific note, a specific '#' anchor. Should
@@ -132,20 +171,21 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
 ** TODO Set up with HTTPS on internet-facing server
 ** TODO Add README file
 ** TODO Add LICENSE file
-* [0/5] Backend
-** [0/10] Verify/clean up new backend
+* [0/3] Backend
+** [0/11] Verify/clean up new backend
+*** TODO Cap request input size/$CONTENT_LENGTH
+    Put hard cap on CONTENT_LENGTH, this is a defense again Denial-of-Service
+    attacks.
+    ----------------------------------------
+    die "too large" if $len > 512 * 1024; # hard cap
+    ----------------------------------------
+*** TODO Read 'perlsec' manpage
+*** TODO Verify that no modules shell out on any way
 *** TODO Enable & verify taint mode
-*** TODO Clear %ENV early
-    Assign %ENV variables to internal capitalized variables, then clear %ENV
-    completely.
-    ----------------------------------------
-    my $METHOD = $ENV{REQUEST_METHOD} // 'GET';
-    my $QUERY  = $ENV{QUERY_STRING};
-    ----------------------------------------
+    `#!/usr/bin/perl -T`
 *** TODO On failure, the script should `die()` and handle that
     The script doesn't really read like Perl. `die()` should be used, and
     result reasonable server responses.
-*** TODO Saving note should set file mtime
 *** TODO Failing to create uniq id should result in `409 Conflict`
     For 'create'. Goddamn! This is unlikely!
 *** TODO Bad request should result in `400 Bad Request`
@@ -163,16 +203,11 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
 
     Error bodies are JSON objects, such as `{"error": "not_found", "message":
     "..."}`.
+** TODO Reimplement server side API is Golang?
 ** TODO CGI script should support different users
    Lighttpd passes the authenticated username to CGI scripts in as
    `$REMOTE_USER`, along with `$AUTH_TYPE` (which should be 'Basic' here).
-** TODO Cleanup scripts
-   Source a central script, just like for Stickynotes? Central config should
-   also be there. E.g. a variable specifying the data directory.
-** TODO Make sure files have the commit date as mtime
 ** TODO Use fancier login (instead of Basic Auth)
    So we can make prettier login page (also allowing BitWarden and similar
    plugins to autofill the password).
-** TODO Tag support for '/api/list'?
-   Specifically searching for tags. Maybe add: '/api/list?tag=XXX'?
 * EOF

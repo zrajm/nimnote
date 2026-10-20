@@ -1,0 +1,85 @@
+#!/usr/bin/perl
+# Copyright (c) 2026 by zrajm. License: GPLv2.
+
+# https://perl.com/pub/2012/04/perlunicook-standard-preamble.html
+use utf8;      # so literals and identifiers can be in UTF-8
+use v5.14;     # for locale sorting and "unicode_strings" feature
+use strict;    # quote strings, declare variables
+use warnings;  # on by default
+use warnings  qw(FATAL utf8);            # fatalize encoding glitches
+use open      qw(:std :encoding(UTF-8)); # undeclared streams in UTF-8
+use charnames qw(:full :short);          # unneeded in v5.16
+
+use Time::HiRes ();
+use JSON::PP ();
+my $JSON = JSON::PP->new->utf8->canonical;
+
+binmode STDIN,  ':raw';
+binmode STDOUT, ':raw';
+
+sub read_note {
+    my ($file) = @_;
+    return {
+        id      => $file,
+        updated => millistat($file),
+        text    => read_file($file),
+    };
+}
+
+# Read whole file.
+sub read_file {
+    my ($file) = @_;
+    open(my $fh, '<:encoding(UTF-8)', $file)
+        or die "Can't open file '$file' for reading: $!\n";
+    my $data = do { local $/; <$fh> };
+    close($fh) or die "Can't close file '$file' after reading: $!\n";
+    return $data;
+}
+
+# Write whole file.
+sub write_file {
+    my ($file, $data) = @_;
+    open(my $fh, '>:encoding(UTF-8)', $file)
+        or die "Can't open file '$file' for writing: $!\n";
+    print $fh $data;
+    close($fh) or die "Can't close file '$file' after writing: $!\n"
+}
+
+sub write_note {
+    my ($id, $data) = @_;
+    write_file("$id.json", $data);
+    return 0;
+}
+
+# Returns file mtime in milliseconds (= Javascript standard).
+sub millistat {
+    my ($file) = @_;
+    my $mtime = (Time::HiRes::stat($file))[9];
+    return defined $mtime
+        ? int($mtime * 1000 + 0.5)
+        : undef;
+}
+
+# Set file mtime using milliseconds (= Javascript standard).
+sub millitouch {
+    my ($file, $ms) = @_;
+    say "MS: $ms";
+    die "millitouch: missing timestamp" unless defined $ms;
+
+    my $t = $ms / 1000;              # ms -> fractional epoch seconds
+    Time::HiRes::utime($t, $t, $file)
+        or die "millitouch: can't set mtime on $file: $!";
+    return 1;
+}
+
+###############################################################################
+
+for my $file (@ARGV) {
+    print "$file\n";
+    my $data = read_note($file);
+    write_note($file, $JSON->encode($data));
+}
+
+__END__
+
+#EOF

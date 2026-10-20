@@ -1,0 +1,242 @@
+#!/bin/dash
+# Copyright (c) 2026 by zrajm. License: GPLv2.
+
+set -u
+
+###############################################################################
+
+SERVER=dedyn.nomi
+REMOTE_USER=zrajm
+LOGIN="$REMOTE_USER:aYEoWsx3GyHm4FCgmiW3"
+
+API_URL="https://$SERVER/baremarknote/api/notes"
+
+CURL_ARGS="--max-time 1 -u$LOGIN -sSD/dev/stderr"
+
+TEMPDIR="$(mktemp -d)" || exit 1
+cleanup() { rm -rf -- "$TEMPDIR"; }
+trap cleanup EXIT HUP INT TERM
+
+cd "${0%/*}"
+
+###############################################################################
+
+echo() { printf '%s\n' "$@"; }
+print() { printf '%s' "$@"; }
+
+###############################################################################
+
+# List notes.
+list_notes_curl() {
+    curl $CURL_ARGS "$API_URL"
+}
+list_notes_shell() {
+    ../api/notes
+}
+
+# Get note.
+get_note_curl() {
+    local ID="$1"
+    curl $CURL_ARGS "$API_URL?id=$ID"
+}
+get_note_shell() {
+    local ID="$1"
+    QUERY_STRING="id=$ID" ../api/notes
+}
+
+# Create note.
+create_note_curl() {
+    local ID="$1"
+    curl $CURL_ARGS -XPOST --data "$ID" "$API_URL"
+}
+create_note_shell() {
+    local REQ="$1"
+    printf '%s' "$REQ" | REQUEST_METHOD=POST \
+        CONTENT_LENGTH="${#REQ}" ../api/notes
+}
+
+# Update note.
+update_note_curl() {
+    local ID="$1" REQ="$2"
+    curl $CURL_ARGS -XPUT --data "$REQ" "$API_URL?id=$ID"
+}
+update_note_shell() {
+    local ID="$1" REQ="$2"
+    printf '%s' "$REQ" | REQUEST_METHOD=POST \
+        CONTENT_LENGTH="${#REQ}" QUERY_STRING="id=$ID" ../api/notes
+}
+
+# Delete note.
+delete_note_curl() {
+    local ID="$1"
+    curl $CURL_ARGS -XDELETE "$API_URL?id=$ID"
+}
+delete_note_shell() {
+    : # FIXME
+}
+
+###############################################################################
+
+# Must be 11 character url-safe base64 string.
+good_id() {
+    local ID="$1"
+    case "$ID" in
+        *[!a-zA-Z0-9_-]*) return 1 ;;          # no non-url-safe base64 chars
+        ???????????)      return 0 ;;          # 11 characters
+    esac
+    return 1
+}
+
+result() {
+    local TRUTHINESS="$1" TEXT="$2"
+    case "$TRUTHINESS" in
+        0) printf '[ \e[1;32mPASS\e[m ] %s\n' "$TEXT" ;;
+        *) printf '[ \e[1;31mFAIL\e[m ] %s\n' "$TEXT" ;;
+    esac
+}
+
+###############################################################################
+
+echo '######################################################################' \
+     '## Create note'
+
+TEXT='Hello World!'
+UPDATED="$(date +%s%3N)"                       # javascript-style epoch (in ms)
+REQ="$(printf '{"text":"%s","updated":%s}' "$TEXT" "$UPDATED")"
+TEMPFILE="$TEMPDIR/created.json"
+
+echo '----------------------------------------'
+create_note_curl "$REQ" | tee "$TEMPFILE"; echo
+GOT_ID="$(jq -r .id <"$TEMPFILE")"
+GOT_TEXT="$(jq -r .text <"$TEMPFILE")"
+GOT_UPDATED="$(jq -r .updated <"$TEMPFILE")"
+BACKEND_FILE="../data/$GOT_ID.json"
+echo '----------------------------------------'
+
+good_id "$GOT_ID"
+result "$?" "Response 'id' has 11 characters url-safe base64 value"
+
+[ "$TEXT" = "$GOT_TEXT" ]
+result "$?" "Response 'text' has specified value"
+
+[ "$UPDATED" = "$GOT_UPDATED" ]
+result "$?" "Response 'updated' has specified value"
+
+[ -e "$BACKEND_FILE" ]
+result "$?" "Backend file created"
+
+[ "$(cat "$BACKEND_FILE")" = "$(cat "$TEMPFILE")" ]
+result "$?" "Backend file contains response body"
+
+###############################################################################
+
+ID="$GOT_ID"
+echo '######################################################################' \
+     '## Get note'
+
+TEMPFILE="$TEMPDIR/gotten.json"
+
+echo '----------------------------------------'
+get_note_curl "$ID" | tee "$TEMPFILE"; echo
+GOT_ID="$(jq -r .id <"$TEMPFILE")"
+GOT_TEXT="$(jq -r .text <"$TEMPFILE")"
+GOT_UPDATED="$(jq -r .updated <"$TEMPFILE")"
+BACKEND_FILE="../data/$GOT_ID.json"
+echo '----------------------------------------'
+
+[ "$ID" = "$GOT_ID" ]
+result "$?" "Response 'id' has specified value"
+
+[ "$TEXT" = "$GOT_TEXT" ]
+result "$?" "Response 'text' has specified value"
+
+[ "$UPDATED" = "$GOT_UPDATED" ]
+result "$?" "Response 'updated' has specified value"
+
+[ -e "$BACKEND_FILE" ]
+result "$?" "Backend file still exists"
+
+[ "$(cat "$BACKEND_FILE")" = "$(cat "$TEMPFILE")" ]
+result "$?" "Backend file still contains response body"
+
+###############################################################################
+
+ID="$GOT_ID"
+echo '######################################################################' \
+     '## List notes'
+
+TEMPFILE="$TEMPDIR/list.json"
+
+echo '----------------------------------------'
+list_notes_curl | tee "$TEMPFILE"; echo
+echo '----------------------------------------'
+
+jq -e '.list | type == "array"' "$TEMPFILE" >/dev/null
+result "$?" "Response 'list' is array"
+
+jq -e '.list | all(keys == ["id", "updated"])' "$TEMPFILE" >/dev/null
+result "$?" "Response 'list' contains only { \"id\":..., \"updated\":... }"
+
+jq -e ".list | any(.id == \"$ID\")" "$TEMPFILE" >/dev/null
+result "$?" "Response 'list' contains metadata for new note"
+
+jq -e ".list | any(.id == \"$ID\" and .updated == $UPDATED)" \
+   "$TEMPFILE" >/dev/null
+result "$?" "Metadata for new note has correct 'updated'"
+
+jq -e '.list == (.list | sort_by(-.updated, .id))' \
+   "$TEMPFILE" >/dev/null
+result "$?" "Response 'list' is descending sorted by 'updated', then 'id'"
+
+###############################################################################
+
+echo '######################################################################' \
+     '## Update note'
+
+TEXT='Hello New World!'
+UPDATED="$(date +%s%3N)"                       # javascript-style epoch (in ms)
+REQ="$(printf '{"id":"%s","text":"%s","updated":%s}' "$ID" "$TEXT" "$UPDATED")"
+TEMPFILE="$TEMPDIR/updated.json"
+
+echo '----------------------------------------'
+update_note_curl "$ID" "$REQ" | tee "$TEMPFILE"; echo
+GOT_ID="$(jq -r .id <"$TEMPFILE")"
+GOT_TEXT="$(jq -r .text <"$TEMPFILE")"
+GOT_UPDATED="$(jq -r .updated <"$TEMPFILE")"
+BACKEND_FILE="../data/$GOT_ID.json"
+echo '----------------------------------------'
+
+[ "$ID" = "$GOT_ID" ]
+result "$?" "Response 'id' has specified value"
+
+[ "$TEXT" = "$GOT_TEXT" ]
+result "$?" "Response 'text' has specified value"
+
+[ "$UPDATED" = "$GOT_UPDATED" ]
+result "$?" "Response 'updated' has specified value"
+
+[ -e "$BACKEND_FILE" ]
+result "$?" "Backend file still exists"
+
+[ "$(cat "$BACKEND_FILE")" = "$(cat "$TEMPFILE")" ]
+result "$?" "Backend file contains update response body"
+
+###############################################################################
+
+echo '######################################################################' \
+     '## Delete note'
+
+TEMPFILE="$TEMPDIR/deleted.json"
+
+echo '----------------------------------------'
+delete_note_curl "$ID" | tee "$TEMPFILE"; echo
+BACKEND_FILE="../data/$ID.json"
+echo '----------------------------------------'
+
+[ -e "$TEMPFILE" ] && [ ! -s "$TEMPFILE" ]
+result "$?" "Response does not contain body"
+
+[ ! -e "$BACKEND_FILE" ]
+result "$?" "Backend file has been deleted"
+
+#EOF
