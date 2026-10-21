@@ -3,10 +3,10 @@ Author: Zrajm
 Favicon: ../www/baremark.svg
 License: <a href="https://gnu.org/licenses/gpl-2.0.html">GNU General Public License, version 2</a>.
 Created: 2026-10-15 01:09:58+02:00
-Updated: 2026-10-22 00:10:53+02:00
+Updated: 2026-10-22 00:18:38+02:00
 -->
 
-# Baremarknote API
+# Nimnote API
 
 > This API is intentionally kept very simple. Both client and server are meant
 > to have a complete copy of the current data, and therefore any search, tags
@@ -74,7 +74,7 @@ Using `curl`:
 
 ```
 # curl -iu"$USER:$PASSWORD" \
-    -XGET "https://$SERVER/baremarknote/api/notes"
+    -XGET "https://$SERVER/nimnote/api/notes"
 HTTP/2 200
 content-type: application/json
 accept-ranges: bytes
@@ -113,7 +113,7 @@ Using `curl`:
 
 ```
 # curl -iu"$USER:$PASSWORD" \
-    -XGET "https://$SERVER/baremarknote/api/notes?id=fhXt0qjgDMs"
+    -XGET "https://$SERVER/nimnote/api/notes?id=fhXt0qjgDMs"
 HTTP/2 200
 content-type: application/json
 accept-ranges: bytes
@@ -150,7 +150,7 @@ Using `curl`:
 
 ```
 # curl -iu"$USER:$PASSWORD" \
-    -XPOST "https://$SERVER/baremarknote/api/notes" \
+    -XPOST "https://$SERVER/nimnote/api/notes" \
     --data '{"created":1792475078800,"text":"Hello!","updated":1792475078800}'
 HTTP/2 201
 content-type: application/json
@@ -190,7 +190,7 @@ Using `curl`:
 
 ```
 # curl -iu"$USER:$PASSWORD" \
-    -XPUT 'https://dedyn.nomi/baremarknote/api/notes?id=fhXt0qjgDMs' --data \
+    -XPUT "https://$SERVER/nimnote/api/notes?id=fhXt0qjgDMs" --data \
     '{"created":1792475078800,"id":"fhXt0qjgDMs","text":"Hi!","updated":1792475081414}'
 HTTP/2 200
 content-type: application/json
@@ -229,7 +229,7 @@ Using `curl`:
 
 ```
 # curl -iu"$USER:$PASSWORD" \
-    -XDELETE "https://$SERVER/baremarknote/api/notes?id=fhXt0qjgDMs"
+    -XDELETE "https://$SERVER/nimnote/api/notes?id=fhXt0qjgDMs"
 HTTP/2 204
 content-type: application/json
 date: Tue, 20 Oct 2026 05:44:42 GMT

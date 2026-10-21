@@ -30,25 +30,25 @@ Site Config
 -----------
 Basic parameters for site.
 
-File: `/etc/lighttpd/conf-available/50-baremarknote-localhost.conf`
+File: `/etc/lighttpd/conf-available/50-nimnote-localhost.conf`
 
 ```
 # Virtual host for local development site 'dedyn.nomi'/'dedyn.localhost'.
 # (This also allows for CGI in `/api/FILE`.)
 
-$HTTP["host"] =~ "^baremarknote\.(localhost|nomi)$" {
+$HTTP["host"] =~ "^nimnote\.(localhost|nomi)$" {
     server.document-root        = "/home/zrajm/Web/lal.dedyn.io"
-    server.errorlog             = "/var/log/lighttpd/error-baremarknote-localhost.log"
-    #accesslog.filename          = "/var/log/lighttpd/access-baremarknote-localhost.log"
+    server.errorlog             = "/var/log/lighttpd/error-nimnote-localhost.log"
+    #accesslog.filename          = "/var/log/lighttpd/access-nimnote-localhost.log"
     #server.error-handler-404    = "/e404.php"
     index-file.names            = ("index.html", "index.txt")
 
-    # Basic auth only for /baremarknote/ (and everything below it).
+    # Basic auth only for /nimnote/ (and everything below it).
     auth.backend                   = "htpasswd"
     auth.backend.htpasswd.userfile = "/etc/lighttpd/password-dedyn"
-    auth.require                   = ("/baremarknote/" => (
+    auth.require                   = ("/nimnote/" => (
         "method"  => "basic",
-        "realm"   => "baremarknote",
+        "realm"   => "nimnote",
         "require" => "valid-user"
     ))
 
@@ -65,8 +65,8 @@ $HTTP["host"] =~ "^baremarknote\.(localhost|nomi)$" {
 Then enable the above using the command.
 
 ```
-# sudo lighttpd-enable-mod baremarknote-localhost
-Enabling baremarknote-localhost: ok
+# sudo lighttpd-enable-mod nimnote-localhost
+Enabling nimnote-localhost: ok
 Run "service lighttpd force-reload" to enable changes
 # sudo service lighttpd force-reload
 ```
@@ -74,7 +74,7 @@ Run "service lighttpd force-reload" to enable changes
 Now, to test the result, run the following command.
 
 ```
-# curl -v 'https://baremarknote.localhost/baremarknote/api/list'
+# curl -v 'https://nimnote.localhost/nimnote/api/list'
 ```
 
 And if the following command ends in a JSON, you know you've succeeded. (If it
@@ -84,7 +84,7 @@ outputs a shell script, then the script isn't really.
 File: `/etc/hosts`
 
 ```
-127.0.0.1  baremarknote.localhost baremarknote.nomi
+127.0.0.1  nimnote.localhost nimnote.nomi
 ```
 
 <!--EOF-->

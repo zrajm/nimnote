@@ -9,7 +9,7 @@ SERVER=dedyn.nomi
 REMOTE_USER=zrajm
 LOGIN="$REMOTE_USER:aYEoWsx3GyHm4FCgmiW3"
 
-API_URL="https://$SERVER/baremarknote/api/notes"
+API_URL="https://$SERVER/nimnote/api/notes"
 
 CURL_ARGS="--max-time 1 -u$LOGIN -sSD/dev/stderr"
 

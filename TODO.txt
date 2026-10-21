@@ -24,15 +24,14 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
    See `certs/README.md`.
 ** DONE Include Baremark & Quotecurl as submodules
    CLOSED: [2026-10-12 Mon 03:36]
-   Needed in order to avoid CORS, since Baremarknote is now on its own local
-   domain.
+   Needed in order to avoid CORS, since Nimnote is now on its own local domain.
 ** DONE Automatically load top note
    CLOSED: [2026-10-13 Tue 00:26]
 ** DONE Show clearly when API called failed
    CLOSED: [2026-10-13 Tue 05:25]
    If there's a non-JSON response, we might be talking to an incorrectly
    configured web server / server alias without CGI. This should very clearly
-   indicate this. (Since it often happens with my `nomi/baremarknote`.)
+   indicate this. (Since it often happens with my `nomi/nimnote`.)
 ** DONE Note should be shown in right mode                              :BUG:
    CLOSED: [2026-10-13 Tue 14:15]
    Always show as fancy, when fancy is set, and as source when source is set.
@@ -89,12 +88,13 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
    'Misconfigured server: API call returned source code'
 ** TODO Button for creating new notes
 ** TODO Menu: Delete note, show API docs(?)
-* [0/16] Frontend
+* [0/17] Frontend
+** TODO Create new icon
 ** TODO URL should reflect currently loaded note
    This should work to link to a specific note, a specific '#' anchor. Should
    use history.pushState() et al. to update the URL. Reloading should bring
    user back to same place.
-   https://<server>/baremarknote/?note=3mUkJ5b-vQT#3-cut-list
+   https://<server>/nimnote/?note=3mUkJ5b-vQT#3-cut-list
 *** TODO Rename 'get' API call to 'note' (for consistency)
 ** TODO Separate (isolated) CSS for edit view
 ** TODO Show second line of note in menu
