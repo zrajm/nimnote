@@ -3,30 +3,37 @@ Author: Zrajm
 Favicon: ../www/baremark.svg
 License: <a href="https://gnu.org/licenses/gpl-2.0.html">GNU General Public License, version 2</a>.
 Created: 2026-10-15 01:09:58+02:00
-Updated: 2026-10-20 11:20:15+02:00
+Updated: 2026-10-22 00:10:53+02:00
 -->
 
 # Baremarknote API
 
-> This API is intentionally kept very simple. Both client and server is meant
+> This API is intentionally kept very simple. Both client and server are meant
 > to have a complete copy of the current data, and therefore any search, tags
 > etc is the responsibility of the client, and is expected to be implemented on
-> client-side only.
+> client-side only. **NOTE: *API is still in beta, and might change.***
 
 <toc class=toc>
 
 This is a REST API for a general JSON storage. Request and response bodies are
-always UTF-8 encoded JSON. Responses all have `Content-Type: application/json`.
-The server currently ignores any client `Accept` header (since responses are
-always JSON).
+UTF-8 encoded JSON. Responses all have `Content-Type: application/json`. The
+server currently ignores any client `Accept` header (since responses are always
+JSON).
+
+**NOTE: *This API is currently in beta, and might still change.***---The basic
+architecture is expected to remain the same, however server may enforce
+stricter JSON property names and values in the future. Do not expect property
+names/values other than those described in this document to work!
 
 
 # API Calls
 
 The API endpoint is `api/notes`, the HTTP method and query string define what
 type of action the server will take. The query string is either `id={id}` or
-empty (depending on the call). The request body, when used, always contain a
-JSON description of the note being modified.
+empty (depending on the call). The request body, when used, always contains a
+JSON description of the (whole) note being modified (the only exception to this
+is that an `id` property may not be present in the request body when
+[creating][create] a note).
 
 | Does     | Method   | Query     | Body | On Success       | Response           |
 |:---------|----------|-----------|------|------------------|--------------------|
@@ -41,16 +48,23 @@ JSON description of the note being modified.
 ## List
 
 `GET` request, no query string, no request body.---On success, returns status
-`200 OK` and a JSON object with a `list` attribute, the value of which is an
-array containing note info. The note info objects contain two properties, `id`
-and `updated`. The output is sorted by the `updated` timestamps (newest first).
+`200 OK` and a JSON object with a `list` propert, the value of which is an
+array of note info. Each element in this array is an object with two
+properties: `id` and `updated`. The array values are sorted by the `updated`
+value, in descending order (newest first).---The value of this `updated`
+property is the same as the a note's `updated` property, or, if the note *does
+not have* an `updated` property, it reflects the time when the note was last
+modified on the server.
 
-For example:
+<div></div>
+
+Prettified example listing:
 
 ```
 {
   "list": [
     { "id": "fhXt0qjgDMs", "updated": 1792475078800 },
+    { "id": "s3bPvB7pED3", "updated": 1787335860241 },
     ...
   ]
 }
@@ -90,7 +104,7 @@ little more data than expected and you should be good.)
 [get]: #get
 ## Get
 
-`POST` request, query string `id={id}`, no request body.---On success, returns
+`GET` request, query string `id={id}`, no request body.---On success, returns
 status `200 OK` and a JSON response containing the requested note object.
 
 <div></div>
@@ -124,10 +138,11 @@ Content-Type: application/json
 [create]: #create
 ## Create
 
-`POST` request, no query string, request body is a JSON with all desired note
-properties (except `id`).---On success, returns status `201 Created` and a JSON
-response containing all the specified properties, plus the server-generated
-`id` property.
+`POST` request, no query string, request body is a JSON with desired note
+properties, except `id`.---On success, returns status `201 Created` and a JSON
+response containing the newly created note object. The response includes a
+(random) server-generated `id` property which is used to refer to the note in
+future communication.
 
 <div></div>
 
@@ -157,24 +172,17 @@ Content-Type: application/json
 {"created":1792475078800,"id":"fhXt0qjgDMs","text":"Hello!","updated":1792475078800}
 ```
 
-To make sure no existing notes is ever overwritten, the server is responsible
-for note `id` generation. The `id` response of the create call must be to refer
-to the note in all future communication. (If the client needs a temporary `id`
-before submitting a note for creation, make sure to choose one that does not
-collide with the 11 character URL-safe base64 [alphabet `a-zA-Z0-9_-`] strings
-used by the server-provided `id` property, and change it to the server-provided
-one on creation.)
-
-The `updated` property submitted by the client is stored, and is returned in
-future calls. (Just like with all properties.)
-
 
 [update]: #update
 ## Update
 
-`PUT` request, query string `id={id}`, request body is JSON with `id`, `text`
-and `updated` values.---On success, returns status `200 OK` and a JSON response
-containing an object with `id`, `text` and `updated`.
+`PUT` request, query string `id={id}`, request body is a JSON with desired note
+properties. (The `id` property must be the same in both the query string, and
+the request body.) The request overwrites the version of the note existing on
+the server in its entirety, properties that do not exist in the request (but
+exists in the stored note) are deleted.---On success, returns status `200 OK`
+and a JSON response containing the new note object, that is, the response
+returned is identical to the request.
 
 <div></div>
 
@@ -212,9 +220,8 @@ future calls.
 [delete]: #delete
 ## Delete
 
-`DELETE` request, query string `id={id}`, request body is JSON with `id`,
-`text` and `updated` values.---On success, returns status `204 No Content` and
-no response body.
+`DELETE` request, query string `id={id}`, no request body.---On success,
+returns status `204 No Content` and no response body.
 
 <div></div>
 
@@ -244,23 +251,31 @@ Content-Type: application/json
 
 # Note Properties
 
-A typical note have the properties `created`, `id`, `text` and `updated` set.
-All properties are set by the client, except for `id`.
+Each note object has the properties: `created`, `id`, `text` and `updated`.
+(The `id` property is generated by the server when [creating][create] a note,
+all other properties are set by the client.)
+
+**NOTE:** The API backend currently stores and returns *all properties*
+specified by the client in a server request (even those not described in this
+document). This is subject to change. *Do not rely on properties other than
+those described in this document.*
 
 
 ## `id` and `updated`
 
 There are two special properties: `id` and `updated`, these are the only two
-properties which are included when [listing][list] notes. Any valid UTF-8
-strings are allowed.
+properties which are included when [listing][list] notes.
 
 - `id` (string): Unique note identifier string---This is an 11 character long,
   URL-safe, base64-encoded string which encodes 66 (sic!) bits of randomness.
-  (It can only contain the characters a--z, A--Z, 0--9, '_' and '-'.) The `id`
-  is generated by the server when the note is first [created][create], and each
-  note has its own unique `id` which persist throughout its lifetime.
+  (It can only contain the characters a--z, A--Z, 0--9, _ and -.) The `id` is
+  generated by the server when the note is first [created][create], and each
+  note has its own unique `id` which persist throughout its lifetime.---If a
+  client needs a temporary `id` to refer to a note locally before the note is
+  pushed to the server, make sure to choose an id which does not collide with
+  the server-assigned `id` values.)
 - `updated` (integer): Note modification time---This is a Javascript-style
-  timestamp (thas is, expressed in *milli*seconds since 1970-01-01 00:00:00
+  timestamp (that is, expressed in *milli*seconds since 1970-01-01 00:00:00
   UTC, just like the output of Javascript's `Date.now()` function). If set, the
   note [listing][list] will include this property (if unset, the note listing
   will instead show which time the server last modified the note, and the note
@@ -275,8 +290,11 @@ common/recommended:
 - `created` (integer): Note creation time---This should be provided when first
   creating a note, and then kept unmodified. The format is the same as for
   `updated`.
-- `tags` (array of strings): Note tags. Tags should not contain any spaces.
-- `text` (string): Note text---This is the main body of a note.
+- `tags` **(NOT IMPLEMENTED, RESERVED FOR FUTURE USE.)** (optional property;
+  array of strings): Note tags. Short strings which should not contain spaces
+  (for example, `klingon` or `language-studies`).
+- `text` (UTF-8 string): Note text---This is the main body of a note. Content
+  is expected to be Markdown formatted.
 
 
 # Converting Timestamps
