@@ -60,16 +60,12 @@ eval { handle_request(); 1 } or do {
 ###############################################################################
 
 sub handle_request {
-
-    # Goto data directory.
-    chdir "$BIN_DIR/$DATA_DIR"
-        or fail(400, 'bad_request', 'Missing data dir on server');
-
-    # FIXME RE-ENABLE -- if dir doesn't exist, error out
-    # if ($REMOTE_USER) {
-    #     chdir $REMOTE_USER
-    #         or fail(400, 'bad_request', "Missing user dir '$REMOTE_USER' on server");
-    # }
+    defined($REMOTE_USER)
+        or fail(500, 'internal_error', "No login session exists");
+    chdir("$BIN_DIR/$DATA_DIR")
+        or fail(500, 'internal_error', 'Missing user data directory');
+    chdir($REMOTE_USER) or
+        fail(500, 'internal_error', "Unknown user '$REMOTE_USER'");
 
     my $id = requested_id();
     fail(400, 'bad_request', 'Invalid note id')
@@ -105,7 +101,7 @@ sub list_notes {
         defined($id)
             ? { id => $id, updated => millistat($file) }
             : ();
-    } read_dir($DATA_DIR);
+    } read_dir('.');
     reply(200, { list => \@list });
 }
 

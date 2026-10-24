@@ -1,7 +1,7 @@
 -*- org -*-
 Copyright (c) 2026 by zrajm. License: GPLv2.
 
-* [23/23] DONE
+* [24/24] DONE
 ** DONE Save note content in localStorage on load
    CLOSED: [2026-10-07 Wed 15:59]
 ** DONE Don't fetch note on init if already in localStorage
@@ -80,6 +80,10 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
    body).
 ** DONE Saving note should set file mtime
    CLOSED: [2026-10-20 Tue 11:45]
+** DONE CGI script should support different users
+   CLOSED: [2026-10-24 Sat 07:47]
+   Lighttpd passes the authenticated username to CGI scripts in as
+   `$REMOTE_USER`, along with `$AUTH_TYPE` (which should be 'Basic' here).
 * [0/3] Editing of notes
 ** TODO Verify return values by checking for shebang
    No value from server should start with `#!` (not list, not get, or any
@@ -171,7 +175,7 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
 ** TODO Set up with HTTPS on internet-facing server
 ** TODO Add README file
 ** TODO Add LICENSE file
-* [0/3] Backend
+* [0/2] Backend
 ** [0/11] Verify/clean up new backend
 *** TODO Cap request input size/$CONTENT_LENGTH
     Put hard cap on CONTENT_LENGTH, this is a defense again Denial-of-Service
@@ -204,9 +208,6 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
     Error bodies are JSON objects, such as `{"error": "not_found", "message":
     "..."}`.
 ** TODO Reimplement server side API is Golang?
-** TODO CGI script should support different users
-   Lighttpd passes the authenticated username to CGI scripts in as
-   `$REMOTE_USER`, along with `$AUTH_TYPE` (which should be 'Basic' here).
 ** TODO Use fancier login (instead of Basic Auth)
    So we can make prettier login page (also allowing BitWarden and similar
    plugins to autofill the password).
