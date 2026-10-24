@@ -21,33 +21,34 @@ function dateStr(epochSec, date = new Date(epochSec)) {
     + x.timeZoneName.replace(/^GMT(.*)$/, (_, x) => x || '+00:00')
 }
 
-class HTTPError   extends Error {}
-class SourceError extends Error {}
+class HTTPError extends Error {}
 function handleErrors(e) {
-  if      (e instanceof HTTPError)   { showError(`Server error: ${e.message}` ) }
-  else if (e instanceof SourceError) { showError(`Misconfigured server: ${e.message}`) }
-  else if (e instanceof SyntaxError) { showError('Server sent invalid JSON'   ) }
-  else                               { showError(`Network error: ${e.message}`) }
-}
-
-// Returns promise, resolving in text.
-function fetchText(url) {
-  return fetch(url).then(reply => {
-    if (!reply.ok) {
-      return Promise.reject(new HTTPError(`HTTP ${reply.status} ${reply.statusText}`))
-    }
-    return reply.text()
-  })
+  if (e instanceof HTTPError) {
+    showError(`Server error: ${e.message}`)
+  } else if (e instanceof SyntaxError) {
+    showError('Server error: Invalid JSON response')
+  } else {
+    showError(`Network error: ${e.message}`)
+  }
 }
 
 // Returns promise, resolving in JSON.
 function fetchJSON(url) {
-  return fetchText(url).then(reply => {
-    if (reply.startsWith('#!')) {
-      return Promise.reject(new SourceError('API call returned source code'))
+  return fetch(url).then(reply => reply.text().then(text => {
+    if (text.startsWith('#!')) {
+      throw new HTTPError('API call returned source code')
     }
-    return JSON.parse(reply)
-  })
+    const body = JSON.parse(text)              // may throw SyntaxError
+    // Server responded with a (JSON) error message.
+    if (!reply.ok) {
+      const err = new HTTPError(body?.message ?? `HTTP ${reply.status}`)
+      err.status = reply.status
+      err.code = body?.error
+      err.body = body
+      throw err
+    }
+    return body
+  }))
 }
 
 // Fetch the heading from a Markdown document.

@@ -1,7 +1,7 @@
 -*- org -*-
 Copyright (c) 2026 by zrajm. License: GPLv2.
 
-* [24/24] DONE
+* [25/25] DONE
 ** DONE Save note content in localStorage on load
    CLOSED: [2026-10-07 Wed 15:59]
 ** DONE Don't fetch note on init if already in localStorage
@@ -11,6 +11,8 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
 ** DONE Note search
    CLOSED: [2026-10-09 Fri 00:11]
 ** DONE Show notes as rendered HTML
+   CLOSED: [2026-10-09 Fri 04:40]
+** DONE Add Markdown
    CLOSED: [2026-10-09 Fri 04:40]
 ** DONE Script for setting up HTTPS certificates
    CLOSED: [2026-10-12 Mon 01:06]
@@ -32,9 +34,13 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
    If there's a non-JSON response, we might be talking to an incorrectly
    configured web server / server alias without CGI. This should very clearly
    indicate this. (Since it often happens with my `nomi/nimnote`.)
+** DONE Show errors in a notification-like card
+   CLOSED: [2026-10-13 Tue 05:29]
 ** DONE Note should be shown in right mode                              :BUG:
    CLOSED: [2026-10-13 Tue 14:15]
-   Always show as fancy, when fancy is set, and as source when source is set.
+   Clicking on note in menu should display in current mode, i.e. load into
+   rendered HTML if view is 'fancy'. If in 'fancy' mode, render as HTML. If
+   not, display Markdown.
 ** DONE Put source in textarea (so it can be modified)
    CLOSED: [2026-10-13 Tue 17:37]
 ** DONE Remove use of 'id' attributes on web page (use 'data-id' instead)
@@ -84,12 +90,15 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
    CLOSED: [2026-10-24 Sat 07:47]
    Lighttpd passes the authenticated username to CGI scripts in as
    `$REMOTE_USER`, along with `$AUTH_TYPE` (which should be 'Basic' here).
-* [0/3] Editing of notes
-** TODO Verify return values by checking for shebang
+** DONE Verify return values by checking for shebang
+   CLOSED: [2026-10-24 Sat 08:13]
    No value from server should start with `#!` (not list, not get, or any
    other).
    Not just the `list` call.
    'Misconfigured server: API call returned source code'
+** DONE Set up with HTTPS on internet-facing server
+   CLOSED: [2026-10-24 Sat 07:48]
+* [0/2] Editing of notes
 ** TODO Button for creating new notes
 ** TODO Menu: Delete note, show API docs(?)
 * [0/17] Frontend
@@ -109,40 +118,44 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
 
    When app starts, the notes should only be downloaded if they have a newer
    datestamp in the index, otherwise just retain version in localStorage.
-** TODO Respect rendering mode when loading new note
-   Clicking on note in menu should display in current mode, i.e. load into
-   rendered HTML if view is 'fancy'. If in 'fancy' mode, render as HTML. If
-   not, display Markdown.
 ** TODO '#' at top of note should render correctly
    It actually does if one double clicks on the view a couple of times, it just
    doesn't show up the first time. :(
 ** TODO Hide note menu (completely)
-** [0/1] Switch between preview & Markdown
-   Insert a '\b' (backspace character) where the cursor is before running it
-   through Markdown. Then insert an HTML tag which we can scroll to in order to
-   get to that spot in the preview.
-*** TODO Figure out cursor position from user double-click in preview
-    When user double click/long taps on the preview text, we should switch to
-    edit mode, and place the cursor in the same position.
+** TODO Improve switch from Markdown to HTML
+   Currently a '\b' (backspace character) is inserted where the cursor is
+   before running it through Markdown. Then, after Markdown processing, that is
+   replaced with an HTML tag which the user interface scrolls to in order to
+   get the same spot in the fancy text, as the user double clicked in the
+   source.
 
-    Deepseek says one can use something along the lines of:
-    ----------------------------------------
-    document.addEventListener('dblclick', () => {
-      const sel = window.getSelection()
-      if (sel.rangeCount === 0) { return }
-      const r = sel.getRangeAt(0)
-      console.log(r.toString(), r.startContainer, r.startOffset, r.endOffset)
-    })
-    ----------------------------------------
-    And insists that this work for double-clicking on text, even if it is
-    non-editable.
+   This approach is okay-ish, but will mess up the Markdown-to-HTML conversion
+   if user clicks on a markdown structure---e.g. between two asterisks in a
+   **bold** construction.
+** TODO Improve switch from HTML to Markdown
+   Figure out cursor position from user double-click in preview.
+
+   When user double click/long taps on the preview text, we should switch to
+   edit mode, and place the cursor in the same position.
+
+   Deepseek says one can use something along the lines of:
+   ----------------------------------------
+   document.addEventListener('dblclick', () => {
+     const sel = window.getSelection()
+     if (sel.rangeCount === 0) { return }
+     const r = sel.getRangeAt(0)
+     console.log(r.toString(), r.startContainer, r.startOffset, r.endOffset)
+   })
+   ----------------------------------------
+   And insists that this work for double-clicking on text, even if it is
+   non-editable.
 ** TODO Save (whole) notes to server
    When this is done, rewrite syncNote() so as to retain the newest note
    instead of always fetching the server version (and overwriting the local
    note).
-** TODO Add Markdown
-   Markdown library and CSS shall be configurable.
-** TODO Show errors in a notification-like card
+** TODO Make Markdown library & CSS configurable
+   User should be able to drop in their own Markdown parsing code, and their
+   own CSS for rendered notes.
 ** TODO The note-selection menu should fade out foreground color
    A scroll shadow. See chat.deepseek.com for an example.
 ** TODO Multiple edit views
@@ -169,11 +182,15 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
 ** TODO Incrementally save edits to server                          :DISTANT:
 ** TODO Highlight found words in menu
 * [0/4] General
+** TODO Generate Open API spec
 ** TODO Find some reasonable way of packaging some test data
    The files of the current 'data/' dir + some scripts for setting up git as
    the backend.
-** TODO Set up with HTTPS on internet-facing server
 ** TODO Add README file
+   + Should describe how to set up `data/` with subdirectories for each user
+   + How to set up lighttpd to serve Nimnote.
+   + How to set up devel server certificates & basic auth.
+   + How to set up prod server certificates & basic auth.
 ** TODO Add LICENSE file
 * [0/2] Backend
 ** [0/11] Verify/clean up new backend
