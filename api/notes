@@ -19,16 +19,18 @@ binmode STDOUT, ':raw';
 
 # Settings.
 my $CREATE_TRIES = 10;                         # tries for finding unique id
-my $DATA_DIR     = '../data';
-my $FILE_EXT     = '.json';                    # file ext used in data dir
-my $USER_REGEX   = qr/([a-z][a-z0-9-]{1,30})/; # basic auth username
-my $ID_REGEX     = qr/[a-zA-Z0-9_-]{11}/;
+my $DATA_DIR   = '../data';
+my $FILE_EXT   = '.json';                      # file ext used in data dir
+my $USER_REGEX = qr/[a-z][a-z0-9-]{1,30}/;     # basic auth username
+my $ID_REGEX   = qr/[a-zA-Z0-9_-]{11}/;
 
 # Get settings from environment & clear it.
-my $QUERY_STRING   =  $ENV{QUERY_STRING};
-my $REQUEST_METHOD =  $ENV{REQUEST_METHOD} // 'GET';
-my $CONTENT_LENGTH = ($ENV{CONTENT_LENGTH} // '') =~ /^([1-9]\d*)\z/  ? $1 + 0 : 0;
-my $REMOTE_USER    = ($ENV{REMOTE_USER}    // '') =~ /^$USER_REGEX\z/ ? $1 : '';
+my $QUERY_STRING   = $ENV{QUERY_STRING};
+my $REQUEST_METHOD = $ENV{REQUEST_METHOD} // 'GET';
+my $CONTENT_LENGTH
+    = ($ENV{CONTENT_LENGTH} // '') =~ /^([1-9]\d*)\z/ ? $1 + 0 : 0;
+my $REMOTE_USER
+    = ($ENV{REMOTE_USER} // '') =~ /^($USER_REGEX)\z/ ? $1 : undef;
 %ENV = ();
 
 # Some defaults.
@@ -43,8 +45,8 @@ my %STATUS_TEXT = (
 
 eval { handle_request(); 1 } or do {
     my $error = $@;
-    unless (ref $error eq 'HASH') {
-        warn "notes: $error";
+    # Script die()d with simple string arg, use generic error message.
+    if (ref $error ne 'HASH') {
         $error = {
             status => 500,
             error => 'internal_error',
