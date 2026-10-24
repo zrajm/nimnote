@@ -7,12 +7,13 @@ import './search.js'
 import { updateView } from './view-switcher.js'
 import noteCache from './notecache.js'
 
-function dateStr(epochSec, date = new Date(epochSec)) {
+function dateStr(epochMs) {
+  if (epochMs == null) { return null }
   const x = new Intl.DateTimeFormat('en-US', {
     hour12: false, timeZoneName: 'longOffset',
     year: 'numeric',  month: '2-digit',    day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(date)
+  }).formatToParts(new Date(epochMs))
     .reduce((a, { type, value }) => (a[type] = value, a), {})
 
   // timeZoneName is 'GMT+02:00' or 'GMT' for UTC.
@@ -83,7 +84,10 @@ function syncNote(remoteNoteInfo, func) {
 
 function updateMenuItem(note, $menuItem, func) {
   $menuItem.innerText = getNoteHeading(note.text) // update note in index menu
-  $menuItem.setAttribute('title', `Updated: ${dateStr(note.updated)}`)
+  $menuItem.setAttribute('title',
+                         `ID:\t${note.id ?? 'N/A'}\n` +
+                         `Created:\t${dateStr(note.created) ?? 'N/A'}\n` +
+                         `Updated:\t${dateStr(note.updated) ?? 'N/A'}`)
   if (func) { func(note) }
 }
 

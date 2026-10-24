@@ -10,19 +10,18 @@
 export default class noteCache {
   static get(id) {
     const item = localStorage.getItem(id)
-    if (item == null) { return null }
-    const { text, updated } = JSON.parse(item)
-    return { id, text, updated }
+    return item == null ? null : JSON.parse(item)
   }
 
-  static set({ id, text, updated }) {
+  static set(item) {
+    const { id } = item
     try {
-      localStorage.setItem( id, JSON.stringify({ updated, text }))
+      localStorage.setItem( id, JSON.stringify(item))
     } catch(e) {
       console.error(e)
       return null
     }
-    return { id, text, updated }
+    return item
   }
 
   // Return set of matching noteId:s.

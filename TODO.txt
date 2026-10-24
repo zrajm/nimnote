@@ -191,6 +191,11 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
    + How to set up lighttpd to serve Nimnote.
    + How to set up devel server certificates & basic auth.
    + How to set up prod server certificates & basic auth.
+     Basic auth:
+     ----------------------------------------
+     sudo apt install apache2-utils
+     sudo htpasswd -B /etc/lighttpd/password-nimnote USERNAME
+     ----------------------------------------
 ** TODO Add LICENSE file
 * [0/2] Backend
 ** [0/11] Verify/clean up new backend
