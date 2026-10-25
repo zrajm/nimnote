@@ -3,7 +3,12 @@
 
 * { box-sizing: border-box; }
 
-html { color-scheme: light dark; }
+html {
+  color-scheme: light dark;
+  --accent: #6750a4;
+  --accent-hover: #7a64b8;
+  --on-accent: #ffffff;
+}
 body {
   background: #fff; color: #111;
   margin: 0; font: 16px/1.4 system-ui, sans-serif;
@@ -16,6 +21,8 @@ body {
 aside { background: #8882 }
 a {
   color: #06c;
+}
+a, button {
   cursor: pointer;
 }
 

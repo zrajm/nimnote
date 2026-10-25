@@ -1,7 +1,7 @@
 -*- org -*-
 Copyright (c) 2026 by zrajm. License: GPLv2.
 
-* [25/25] DONE
+* [29/31] DONE
 ** DONE Save note content in localStorage on load
    CLOSED: [2026-10-07 Wed 15:59]
 ** DONE Don't fetch note on init if already in localStorage
@@ -98,9 +98,11 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
    'Misconfigured server: API call returned source code'
 ** DONE Set up with HTTPS on internet-facing server
    CLOSED: [2026-10-24 Sat 07:48]
-* [0/2] Editing of notes
-** TODO Button for creating new notes
+** DONE Button for creating new notes
+   CLOSED: [2026-10-25 Sun 06:48]
+   Added the GUI button, it doesn't actually DO anything yet.
 ** TODO Menu: Delete note, show API docs(?)
+** TODO Creation & syncing of notes to server
 * [0/17] Frontend
 ** TODO Create new icon
 ** TODO URL should reflect currently loaded note

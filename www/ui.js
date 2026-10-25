@@ -4,6 +4,7 @@
 import { html, showError, $nav, $view } from './shared.js'
 import './resize-menu.js'
 import './search.js'
+import './new-note.js'
 import { updateView } from './view-switcher.js'
 import noteCache from './notecache.js'
 
