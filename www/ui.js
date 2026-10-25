@@ -6,7 +6,7 @@ import './resize-menu.js'
 import './search.js'
 import './new-note.js'
 import { updateView } from './view-switcher.js'
-import noteCache from './notecache.js'
+import localNotes from './localnotes.js'
 
 function dateStr(epochMs) {
   if (epochMs == null) { return null }
@@ -68,19 +68,18 @@ function syncNote(remoteNoteInfo, func) {
   const [$menuItem] = html(`<a data-id="${remoteNoteInfo.id}">`)
 
   $nav.append($menuItem)
-  const localNote = noteCache.get(remoteNoteInfo.id)
-
-  // Get note from cache (if exists and is newer or same as note on server).
-  if (localNote && localNote.updated >= remoteNoteInfo.updated) {
-    updateMenuItem(localNote, $menuItem, func)
-    return
-  }
-  // Get note info from server.
-  fetchJSON(`./api/notes?id=${remoteNoteInfo.id}`)
-    .then(remoteNote => {
+  localNotes.get(remoteNoteInfo.id).then(localNote => {
+    // Get note from cache (if exists and is newer or same as note on server).
+    if (localNote && localNote.updated >= remoteNoteInfo.updated) {
+      updateMenuItem(localNote, $menuItem, func)
+      return
+    }
+    // Get note info from server.
+    fetchJSON(`./api/notes?id=${remoteNoteInfo.id}`).then(remoteNote => {
       updateMenuItem(remoteNote, $menuItem, func)
-      noteCache.set(remoteNote)
+      localNotes.set(remoteNote) // FIXME: Handle failure to write note
     })
+  })
 }
 
 function updateMenuItem(note, $menuItem, func) {
@@ -107,11 +106,11 @@ $nav.addEventListener('click', e => {
   // If in edit mode, save current note text to cache.
   const $textarea = $view.querySelector('textarea')
   if ($textarea) {
-    noteCache.set({
+    localNotes.set({
       id     : $view.dataset.id,
       text   : $textarea.value,
-      updated: Math.round(Date.now() / 1000),
-    })
+      updated: Date.now(),
+    }) // FIXME: Handle failure to write note
   }
 
   // let modified / middle clicks behave normally
@@ -119,8 +118,9 @@ $nav.addEventListener('click', e => {
   e.preventDefault()
 
   const noteId = $a.dataset.id
-  const localNote = noteCache.get(noteId)
-  updateView(localNote)
+  localNotes.get(noteId).then(localNote => {
+    updateView(localNote)
+  })
 })
 
 //EOF

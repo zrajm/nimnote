@@ -1,7 +1,7 @@
 -*- org -*-
 Copyright (c) 2026 by zrajm. License: GPLv2.
 
-* [29/31] DONE
+* [30/30] DONE
 ** DONE Save note content in localStorage on load
    CLOSED: [2026-10-07 Wed 15:59]
 ** DONE Don't fetch note on init if already in localStorage
@@ -101,9 +101,16 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
 ** DONE Button for creating new notes
    CLOSED: [2026-10-25 Sun 06:48]
    Added the GUI button, it doesn't actually DO anything yet.
+** DONE Use `IndexDB` instead of `localStorage` for notes
+   CLOSED: [2026-10-25 Sun 09:35]
+   IndexDB (`navigator.storage`) allows for 10GB quota (on my machine) -- that
+   'giga' with a 'G' -- while browser defaults for localStorage only allows for
+   circa 10MB or so for storage.
+
+   However, it seems that IndexDB will only work for pages fetched via HTTPS.
+* [0/18] Frontend
 ** TODO Menu: Delete note, show API docs(?)
 ** TODO Creation & syncing of notes to server
-* [0/17] Frontend
 ** TODO Create new icon
 ** TODO URL should reflect currently loaded note
    This should work to link to a specific note, a specific '#' anchor. Should
@@ -164,12 +171,6 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
    For making the most of a large screen, allow editing of multiple notes at
    the same time. Dragging a note onto one of the borders of the edit view
    should open up a new edit view there.
-** TODO Use `IndexDB` instead of `localStorage` for notes
-   IndexDB (`navigator.storage`) allows for 10GB quota (on my machine) -- that
-   'giga' with a 'G' -- while browser defaults for localStorage only allows for
-   circa 10MB or so for storage.
-
-   However, it seems that IndexDB will only work for pages fetched via HTTPS.
 ** TODO Add note creation time to interface?
    Reverse chronological sort by last update time
    ----------------------------------------

@@ -5,7 +5,7 @@
 // adding the 'hidden' attribute.
 
 import { $nav, html } from './shared.js'
-import noteCache from './notecache.js'
+import localNotes from './localnotes.js'
 
 const [$form] = html(`<form><input type=search name=q autocomplete=off placeholder=" ">`)
 
@@ -14,11 +14,12 @@ $nav.prepend($form)
 $form.addEventListener('submit', e => {
   e.preventDefault();
   const regex = RegExp($form.elements.q.value.trim(), 'i')
-  const foundIds = noteCache.search(regex)
-  for (const $a of $nav.children) {
-    const menuItemId = $a.dataset.id
-    $a.hidden = menuItemId && !foundIds.has(menuItemId)
-  }
+  localNotes.search(regex).then(foundIds => {
+    for (const $a of $nav.children) {
+      const menuItemId = $a.dataset.id
+      $a.hidden = menuItemId && !foundIds.has(menuItemId)
+    }
+  })
 })
 
 const searchIcon = new URL('search.svg', import.meta.url).href

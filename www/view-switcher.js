@@ -3,7 +3,7 @@
 
 import { $view } from './shared.js'
 import htmlifyMarkdown from './htmlify-markdown.js'
-import noteCache from './notecache.js'
+import localNotes from './localnotes.js'
 
 export function updateView(note) {
   if ($view.classList.contains('fancy')) {
@@ -35,11 +35,11 @@ $view.addEventListener('dblclick', ({ target, clientX, clientY }) => {
     // Insert backspace character at cursor position. (This survives Markdown
     // conversion, and we late insert an element to scroll to here.)
     const scrollToMouse = caret != null        // non-nullish
-    noteCache.set({
+    localNotes.set({
       id     : noteId,
       text   : target.value,
       updated: Math.round(Date.now() / 1000),
-    })
+    }) // FIXME: Handle failure to write note
     const noteText = scrollToMouse
       ? (x => x.slice(0, caret) + '\b' + x.slice(caret))(target.value)
       : target.value
@@ -60,8 +60,9 @@ $view.addEventListener('dblclick', ({ target, clientX, clientY }) => {
   // Go into non-'fancy' mode, i.e. display Markdown source.
   // (Loads the current note from localStorage and displays it.)
   // FIXME: Can we jump to the position the user clicked on here too?
-  const note = noteCache.get(noteId)
-  showSource(note.text)
+  localNotes.get(noteId).then(note => {
+    showSource(note.text)
+  })
 })
 
 //EOF
