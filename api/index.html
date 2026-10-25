@@ -10,5 +10,11 @@
       main.value = md.replace(/^<!--\s*(\w+:.*)\s+-->$/ms, "$1"))
 </script>
 <script type=module src=/www/scent.js></script>
-<style>table a { white-space: nowrap } pre, tt { background: #aaa4 }</style>
+<style>
+  table a { white-space: nowrap }
+  pre, tt {
+    background: #eee;
+    @media (prefers-color-scheme: dark) { background: #444 }
+  }
+</style>
 <!--EOF-->
