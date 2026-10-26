@@ -1,7 +1,7 @@
 -*- org -*-
 Copyright (c) 2026 by zrajm. License: GPLv2.
 
-* [30/30] DONE
+* [31/31] DONE
 ** DONE Save note content in localStorage on load
    CLOSED: [2026-10-07 Wed 15:59]
 ** DONE Don't fetch note on init if already in localStorage
@@ -108,7 +108,26 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
    circa 10MB or so for storage.
 
    However, it seems that IndexDB will only work for pages fetched via HTTPS.
-* [0/18] Frontend
+** DONE API version 2
+   CLOSED: [2026-10-26 Mon 15:34]
+   + Not list is no longer sorted
+   + Note ID are 12 chars
+   + Client provide note ID on creation
+   + Create note no longer have response body
+* [0/21] Frontend
+** TODO Sync: Push notes that only exist locally to server
+   Notes created locally are currently never pushed to the server.
+** TODO Periodic sync
+   Occasionally try to fetch/push notes to server.
+** TODO Note sync
+   + On editing, mark note as `dirty: true`.
+   + When pushing note to server, mark as `dirty: false`.
+
+   + Local note that doesn't exist on server should be pushed to server.
+   + Local note newer than the one on the server should be pushed to server.
+   + Remote note newer than the local version should be pulled from server.
+     - But local note is dirty -- conflict.
+   + Remote note not present locally should be pulled.
 ** TODO Menu: Delete note, show API docs(?)
 ** TODO Creation & syncing of notes to server
 ** TODO Create new icon
@@ -201,6 +220,10 @@ Copyright (c) 2026 by zrajm. License: GPLv2.
      ----------------------------------------
 ** TODO Add LICENSE file
 * [0/2] Backend
+** [0/3] API changes
+*** TODO Drop support for 11 char `id`s
+*** TODO Update should return empty body
+*** TODO Note listing should not sort
 ** [0/11] Verify/clean up new backend
 *** TODO Cap request input size/$CONTENT_LENGTH
     Put hard cap on CONTENT_LENGTH, this is a defense again Denial-of-Service

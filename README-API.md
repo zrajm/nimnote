@@ -3,7 +3,7 @@ Author: Zrajm
 Favicon: ../www/baremark.svg
 License: <a href="https://gnu.org/licenses/gpl-2.0.html">GNU General Public License, version 2</a>.
 Created: 2026-10-15 01:09:58+02:00
-Updated: 2026-10-22 00:18:38+02:00
+Updated: 2026-10-26 15:34:45+01:00
 -->
 
 # Nimnote API
@@ -13,7 +13,7 @@ Updated: 2026-10-22 00:18:38+02:00
 > etc is the responsibility of the client, and is expected to be implemented on
 > client-side only. **NOTE: *API is still in beta, and might change.***
 
-<toc class=toc>
+<toc upto=2 class=toc>
 
 This is a REST API for a general JSON storage. Request and response bodies are
 UTF-8 encoded JSON. Responses all have `Content-Type: application/json`. The
@@ -36,7 +36,7 @@ is that an `id` property may not be present in the request body when
 [creating][create] a note).
 
 | Does     | Method   | Query     | Body | On Success       | Response           |
-|:---------|----------|-----------|------|------------------|--------------------|
+|----------|----------|-----------|------|------------------|--------------------|
 | [List]   | `GET`    | –         | –    | `200 OK`         | list, newest first |
 | [Get]    | `GET`    | `id={id}` | –    | `200 OK`         | note               |
 | [Create] | `POST`   | –         | note | `201 Created`    | note               |
@@ -48,13 +48,30 @@ is that an `id` property may not be present in the request body when
 ## List
 
 `GET` request, no query string, no request body.---On success, returns status
-`200 OK` and a JSON object with a `list` propert, the value of which is an
+`200 OK` and a JSON object with a `list` property, the value of which is an
 array of note info. Each element in this array is an object with two
 properties: `id` and `updated`. The array values are sorted by the `updated`
-value, in descending order (newest first).---The value of this `updated`
-property is the same as the a note's `updated` property, or, if the note *does
-not have* an `updated` property, it reflects the time when the note was last
-modified on the server.
+value, in descending order (newest first).
+
+The value of the `updated` property reflect the corresponding note, unless the
+note *does not have* an `updated` property, in which case reflects the time
+when the note was last modified on the server.
+
+<div></div>
+
+**Client should sync notes by:** Fetching the list of notes on the server, and
+then compare the `updated` timestamp for the local and remote version of each
+note, and do:
+
+- If local & remote have same timestamp → do nothing
+- If local note doesn't exist on server → push to server
+- If local note is newer → push to server
+- If remote note doesn't exist locally → fetch from server
+- If remote note is newer:
+  <ul style="margin-top:0">
+    <li>and local note is unedited → fetch from server</li>
+    <li>but local note is modified → conflict</li>
+  </ul>
 
 <div></div>
 
@@ -74,7 +91,7 @@ Using `curl`:
 
 ```
 # curl -iu"$USER:$PASSWORD" \
-    -XGET "https://$SERVER/nimnote/api/notes"
+  -XGET "https://$SERVER/nimnote/api/notes"
 HTTP/2 200
 content-type: application/json
 accept-ranges: bytes
@@ -88,17 +105,18 @@ server: lighttpd/1.4.63
 Running the script directly from the server command line:
 
 ```
-# ./api/notes
+# REMOTE_USER="$USER" ./api/notes
 Status: 200 OK
 Content-Type: application/json
 
 {"list":[{"id":"fhXt0qjgDMs","updated":1792475078800}]}
 ```
 
-**FUTURE:** Additional fields and a query string may be added in the future to
-allow for paginated index listing. The behavior described here, is not expected
-to change however. (Just make sure your client doesn't choke if you get a
-little more data than expected and you should be good.)
+**FUTURE:** Additional properties may be added to the root level of the JSON
+response, and a query string may be added to the request allow for paginated
+index listing. The behavior described here is not expected to change however.
+(Just make sure your client doesn't choke if you get a little more data than
+expected and you should be good.)
 
 
 [get]: #get
@@ -113,25 +131,25 @@ Using `curl`:
 
 ```
 # curl -iu"$USER:$PASSWORD" \
-    -XGET "https://$SERVER/nimnote/api/notes?id=fhXt0qjgDMs"
+  -XGET "https://$SERVER/nimnote/api/notes?id=fhXt0qjgDMs"
 HTTP/2 200
 content-type: application/json
 accept-ranges: bytes
-content-length: 60
+content-length: 84
 date: Tue, 20 Oct 2026 05:44:39 GMT
 server: lighttpd/1.4.63
 
-{"id":"fhXt0qjgDMs","text":"Hello!","updated":1792475078800}
+{"created":1792475078800,"id":"fhXt0qjgDMs","text":"Hello!","updated":1792475078800}
 ```
 
 Running the script directly from the server command line:
 
 ```
-QUERY_STRING='id=fhXt0qjgDMs' ./api/notes
+# REMOTE_USER="$USER" QUERY_STRING='id=fhXt0qjgDMs' ./api/notes
 Status: 200 OK
 Content-Type: application/json
 
-{"id":"fhXt0qjgDMs","text":"Hello!","updated":1792475078800}
+{"created":1792475078800,"id":"fhXt0qjgDMs","text":"Hello!","updated":1792475078800}
 ```
 
 
@@ -150,8 +168,8 @@ Using `curl`:
 
 ```
 # curl -iu"$USER:$PASSWORD" \
-    -XPOST "https://$SERVER/nimnote/api/notes" \
-    --data '{"created":1792475078800,"text":"Hello!","updated":1792475078800}'
+  -XPOST "https://$SERVER/nimnote/api/notes" \
+  --data '{"created":1792475078800,"text":"Hello!","updated":1792475078800}'
 HTTP/2 201
 content-type: application/json
 content-length: 84
@@ -165,7 +183,8 @@ Running the script directly from the server command line:
 
 ```
 # REQ='{"created":1792475078800,"text":"Hello!","updated":1792475078800}'
-# printf '%s' "$REQ" | CONTENT_LENGTH="${#REQ}" REQUEST_METHOD=POST ../api/notes
+# echo "$REQ" | \
+  REMOTE_USER="$USER" CONTENT_LENGTH="${#REQ}" REQUEST_METHOD=POST ./api/notes
 Status: 201 Created
 Content-Type: application/json
 
@@ -190,8 +209,8 @@ Using `curl`:
 
 ```
 # curl -iu"$USER:$PASSWORD" \
-    -XPUT "https://$SERVER/nimnote/api/notes?id=fhXt0qjgDMs" --data \
-    '{"created":1792475078800,"id":"fhXt0qjgDMs","text":"Hi!","updated":1792475081414}'
+  -XPUT "https://$SERVER/nimnote/api/notes?id=fhXt0qjgDMs" --data \
+  '{"created":1792475078800,"id":"fhXt0qjgDMs","text":"Hi!","updated":1792475081414}'
 HTTP/2 200
 content-type: application/json
 content-length: 81
@@ -204,9 +223,10 @@ server: lighttpd/1.4.63
 Running the script directly from the server command line:
 
 ```
-REQ='{"created":1792475078800,"id":"fhXt0qjgDMs","text":"Hi!","updated":1792475081414}'
-echo "$REQ" | CONTENT_LENGTH="${#REQ}" QUERY_STRING='id=fhXt0qjgDMs' \
-    REQUEST_METHOD=PUT ./api/notes
+# REQ='{"created":1792475078800,"id":"fhXt0qjgDMs","text":"Hi!","updated":1792475081414}'
+# echo "$REQ" | \
+  REMOTE_USER="$USER" CONTENT_LENGTH="${#REQ}" QUERY_STRING='id=fhXt0qjgDMs' \
+  REQUEST_METHOD=PUT ./api/notes
 Status: 200 OK
 Content-Type: application/json
 
@@ -229,23 +249,20 @@ Using `curl`:
 
 ```
 # curl -iu"$USER:$PASSWORD" \
-    -XDELETE "https://$SERVER/nimnote/api/notes?id=fhXt0qjgDMs"
+  -XDELETE "https://$SERVER/nimnote/api/notes?id=fhXt0qjgDMs"
 HTTP/2 204
 content-type: application/json
 date: Tue, 20 Oct 2026 05:44:42 GMT
 server: lighttpd/1.4.63
-
-
 ```
 
 Running the script directly from the server command line:
 
 ```
-# QUERY_STRING='id=fhXt0qjgDMs' \
-    REQUEST_METHOD=DELETE ./api/notes
+# REMOTE_USER="$USER" QUERY_STRING='id=fhXt0qjgDMs' \
+  REQUEST_METHOD=DELETE ./api/notes
 Status: 204 No Content
 Content-Type: application/json
-
 ```
 
 

@@ -1,0 +1,253 @@
+#!/usr/bin/perl
+# Copyright (c) 2026 by zrajm. License: GPLv2.
+
+# https://perl.com/pub/2012/04/perlunicook-standard-preamble.html
+use utf8;      # so literals and identifiers can be in UTF-8
+use v5.14;     # for locale sorting and "unicode_strings" feature
+use strict;    # quote strings, declare variables
+use warnings;  # on by default
+use warnings  qw(FATAL utf8);            # fatalize encoding glitches
+use open      qw(:std :encoding(utf-8)); # undeclared streams in UTF-8
+use charnames qw(:full :short);          # unneeded in v5.16
+
+use JSON::PP ();
+use MIME::Base64 qw(encode_base64url);
+use Time::HiRes ();
+
+binmode STDIN,  ':raw';
+binmode STDOUT, ':raw';
+
+# Settings.
+my $CREATE_TRIES = 10;                         # tries for finding unique id
+my $DATA_DIR   = '../data';
+my $FILE_EXT   = '.json';                      # file ext used in data dir
+my $USER_REGEX = qr/[a-z][a-z0-9-]{1,30}/;     # basic auth username
+my $ID_REGEX   = qr/[a-zA-Z0-9_-]{12}/;
+
+# Get settings from environment & clear it.
+my $QUERY_STRING   =  $ENV{QUERY_STRING};
+my $REQUEST_METHOD =  $ENV{REQUEST_METHOD} // 'GET';
+my $CONTENT_LENGTH = ($ENV{CONTENT_LENGTH} // '') =~ /^[1-9]\d*\z/ ? $& : 0;
+my ($REMOTE_USER)  = ($ENV{REMOTE_USER}    // '') =~ /^($USER_REGEX)\z/;
+%ENV = ();
+
+# Some defaults.
+my $BIN_DIR     = __FILE__ =~ m#^(.*)/# ? $1 : '';
+my $JSON        = JSON::PP->new->utf8->canonical;
+my %STATUS_TEXT = (
+    200 => 'OK',                 201 => 'Created',   204 => 'No Content',
+    400 => 'Bad Request',        404 => 'Not Found',
+    405 => 'Method Not Allowed', 409 => 'Conflict',
+    500 => 'Internal Server Error',
+);
+
+eval { handle_request(); 1 } or do {
+    my $error = $@;
+    # Script die()d with simple string arg, use generic error message.
+    if (ref $error ne 'HASH') {
+        $error = {
+            status => 500,
+            error => 'internal_error',
+            message => 'Internal server error',
+        };
+    }
+    reply($error->{status}, {
+        error => $error->{error},
+        message => $error->{message},
+    });
+};
+
+###############################################################################
+
+sub handle_request {
+    defined($REMOTE_USER)
+        or fail(500, 'internal_error', "No login session exists");
+    chdir("$BIN_DIR/$DATA_DIR")
+        or fail(500, 'internal_error', 'Missing user data directory');
+    chdir($REMOTE_USER) or
+        fail(500, 'internal_error', "Unknown user '$REMOTE_USER'");
+
+    my $id = requested_id();
+    fail(400, 'bad_request', 'Invalid note id')
+        if defined $id && $id !~ /^$ID_REGEX\z/;
+    for ($REQUEST_METHOD) {
+        /^GET$/    && !defined $id && do { list_notes();     last };
+        /^GET$/                    && do { get_note($id);    last };
+        /^PUT$/    &&  defined $id && do { update_note($id); last };
+        /^POST$/   &&  defined $id && do { create_note($id); last };
+        /^DELETE$/ &&  defined $id && do { delete_note($id); last };
+        fail(405, 'method_not_allowed', 'Method not allowed')
+    }
+}
+
+sub requested_id {
+    my $query = $QUERY_STRING;
+    return undef unless defined $query && length $query;
+    $query =~ /^id=([^&]*)\z/
+        or fail(400, 'bad_request', 'Query string must be id={id}');
+    return $1;
+}
+
+###############################################################################
+
+# List notes. Respond with object with property `list`, the value of which is
+# an unsorted array of objects. Each object contains `id` and `updated`
+# properties.
+sub list_notes {
+    my $file_regex = qr/^(($ID_REGEX)\Q$FILE_EXT\E)\z/;
+    my @list = map {
+        my ($file, $id) = /$file_regex/;
+        defined($id)
+            ? { id => $id, updated => millistat($file) }
+            : ();
+    } read_dir('.');
+    reply(200, { list => \@list });
+}
+
+# Return note object.
+sub get_note {
+    my ($id) = @_;
+    fail(404, 'not_found', 'Note not found') unless -e note_path($id);
+    my $note = read_note($id);
+    reply(200, $note);
+}
+
+# Overwrite note with new values ('id' must be same in request URL & body).
+sub update_note {
+    my ($id) = @_;
+    my $body = read_body();
+    fail(400, 'bad_request', "Body 'id' required") unless exists $body->{id};
+    fail(400, 'bad_request', "Body & URL 'id' values must be same")
+        if $body->{id} ne $id;
+    fail(404, 'not_found', 'Note not found') unless -f note_path($id);
+    write_note($body);
+    reply(204);
+}
+
+# Create note ('id' must be same in request URL & body).
+sub create_note {
+    my ($id) = @_;
+    my $body = read_body();
+    fail(400, 'bad_request', "URL 'id' value required") unless defined $id;
+    fail(400, 'bad_request', "Body 'id' value required") unless exists $body->{id};
+    fail(400, 'bad_request', "Body & URL 'id' values must be same")
+        if $id ne $body->{id};
+    fail(409, 'conflict', "Note already exists") if -e note_path($id);
+    write_note($body);
+    reply(201, undef, { Location => "?id=$id" });
+}
+
+# Delete note.
+sub delete_note {
+    my ($id) = @_;
+    unlink(note_path($id)) or fail(404, 'not_found', 'Note not found');
+    reply(204);
+}
+
+###############################################################################
+
+# Get the current moment in milliseconds since epoch (Javascript style).
+sub millinow { int(Time::HiRes::time() * 1000) }
+
+# FIXME: Die on error
+# Stat file mtime, get milliseconds since epoch (Javascript style).
+sub millistat {
+    my ($file) = @_;
+    my @stat = Time::HiRes::stat($file) or return ();
+    return int($stat[9] * 1000);
+}
+
+# Set file mtime using milliseconds (= Javascript standard).
+sub millitouch {
+    my ($file, $ms) = @_;
+    die "millitouch: missing timestamp" unless defined $ms;
+
+    my $t = $ms / 1000;              # ms -> fractional epoch seconds
+    Time::HiRes::utime($t, $t, $file)
+        or die "millitouch: can't set mtime on $file: $!";
+    return 1;
+}
+
+# Get list of files in a directory.
+sub read_dir {
+    my ($dir) = @_;
+    opendir(my $dh, $dir) or die "Can't open dir '$dir' for reading: $!\n";
+    my @list = readdir($dh);
+    closedir($dh) or die "Can't close dir '$dir' after reading: $!\n";
+    return @list;
+}
+
+# Read file, return string.
+sub read_file {
+    my ($file) = @_;
+    open(my $fh, '<:encoding(UTF-8)', $file)
+        or die "Can't open file '$file' for reading: $!\n";
+    my $data = do { local $/; <$fh> };
+    close($fh) or die "Can't close file '$file' after reading: $!\n";
+    return $data;
+}
+
+# Write string to file.
+sub write_file {
+    my ($file, $data) = @_;
+    open(my $fh, '>:encoding(UTF-8)', $file)
+        or die "Can't open file '$file' for writing: $!\n";
+    print $fh $data;
+    close($fh) or die "Can't close file '$file' after writing: $!\n"
+}
+
+sub read_note {
+    my ($id) = @_;
+    my $path = note_path($id);
+    my $data = read_file($path);
+    return eval { $JSON->decode($data) };
+}
+
+# Write note & touch file to reflect 'updated' value.
+sub write_note {
+    my ($body, $must_be_new) = @_;
+    my $path = note_path($body->{id});
+    my $temp = "$path.$$.tmp";
+    write_file($temp, $JSON->encode($body));
+    millitouch($temp, $body->{updated}) if $body->{updated};
+
+    # FIXME: Verify this logic stuff
+    if ($must_be_new) {
+        my $created = link($temp, $path);      # returns true/false
+        unlink($temp);
+        return $created;
+    }
+    rename($temp, $path) or do {
+        unlink($temp);
+        die "Can't rename file '$temp': $!";
+    };
+    return 1;
+}
+
+sub read_body {
+    my $length = $CONTENT_LENGTH;
+    fail(400, 'bad_request', 'Request body is required') unless $length > 0;
+    read(STDIN, my $raw, $length);
+    my $body = eval { $JSON->decode($raw) };
+    fail(400, 'bad_request', 'Body must be a JSON object with a string "text"')
+        unless ref $body eq 'HASH' && defined $body->{text} && !ref $body->{text};
+    return $body;
+}
+
+sub note_path { shift() . $FILE_EXT }
+
+sub fail {
+    my ($status, $error, $message) = @_;
+    die +{ status => $status, error => $error, message => $message };
+}
+
+sub reply {
+    my ($status, $body, $header) = @_;
+    print "Status: $status $STATUS_TEXT{$status}\r\n";
+    print "$_: $header->{$_}\r\n" for keys %$header;
+    print "Content-Type: application/json\r\n" if defined $body;
+    print "\r\n";
+    print $JSON->encode($body) if defined $body;
+}
+
+#EOF

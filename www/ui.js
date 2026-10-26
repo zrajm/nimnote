@@ -8,6 +8,15 @@ import './new-note.js'
 import { updateView } from './view-switcher.js'
 import localNotes from './localnotes.js'
 
+// Returns 12 char (URL-safe, unpadded) base64 string (with 72 bit randomness).
+// Character set is [a-zA-z0-9_-] (= 6 bits per character).
+function randomNoteId() {
+  const b64url = { '+': '-', '/': '_' }
+  return btoa(String.fromCharCode(
+    ...crypto.getRandomValues(new Uint8Array(9))
+  )).replace(/[+\/]/g, c => b64url[c])
+}
+
 function dateStr(epochMs) {
   if (epochMs == null) { return null }
   const x = new Intl.DateTimeFormat('en-US', {
@@ -59,43 +68,66 @@ function getNoteHeading(noteText = '') {
   return noteHeading.trim().replace(/^#+ */, '')
 }
 
+function insertSorted($parent, $elem) {
+  const updated  = Number($elem.dataset.updated)
+  const id       = $elem.dataset.id
+  const children = $parent.children
+  let lo = 0
+  let hi = children.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    const $child       = children[mid]
+    const childUpdated = Number($child.dataset.updated)
+    const childId      = $child.dataset.id
+    if (updated > childUpdated || (updated === childUpdated && id < childId)) {
+      hi = mid
+    } else {
+      lo = mid + 1
+    }
+  }
+  $parent.insertBefore($elem, children[lo] ?? null)
+}
+
 // Make sure we have the latest version of each note, and populate the
 // left-hand index menu with note data. FIXME: Sync is simplistic, we only
 // check if server timestamp is the same as local timestamp, and if it isn't
 // local note is overwritten by server note.)
 function syncNote(remoteNoteInfo, func) {
-  // Insert placeholder for note in index menu.
-  const [$menuItem] = html(`<a data-id="${remoteNoteInfo.id}">`)
-
-  $nav.append($menuItem)
   localNotes.get(remoteNoteInfo.id).then(localNote => {
     // Get note from cache (if exists and is newer or same as note on server).
     if (localNote && localNote.updated >= remoteNoteInfo.updated) {
-      updateMenuItem(localNote, $menuItem, func)
+      updateMenuItem(localNote, func)
       return
     }
     // Get note info from server.
-    fetchJSON(`./api/notes?id=${remoteNoteInfo.id}`).then(remoteNote => {
-      updateMenuItem(remoteNote, $menuItem, func)
+    fetchJSON(`./api2/notes?id=${remoteNoteInfo.id}`).then(remoteNote => {
+      updateMenuItem(remoteNote, func)
       localNotes.set(remoteNote) // FIXME: Handle failure to write note
     })
   })
 }
 
-function updateMenuItem(note, $menuItem, func) {
-  $menuItem.innerText = getNoteHeading(note.text) // update note in index menu
-  $menuItem.setAttribute('title',
-                         `ID:\t${note.id ?? 'N/A'}\n` +
-                         `Created:\t${dateStr(note.created) ?? 'N/A'}\n` +
-                         `Updated:\t${dateStr(note.updated) ?? 'N/A'}`)
+function updateMenuItem(note, func) {
+  if (note.created === undefined) {
+    console.log(note)
+  }
+  insertSorted($nav, ...html(
+    `<a data-id="${note.id}" data-updated="${note.updated}" title="` +
+      `Note ID:\t${note.id ?? 'N/A'}\n` +
+      `Created:\t${dateStr(note.created) ?? 'N/A'}\n` +
+      `Updated:\t${dateStr(note.updated) ?? 'N/A'}">` +
+      getNoteHeading(note.text) +
+      '</a>')
+  )
   if (func) { func(note) }
 }
 
-// On load, fetch note index from server.
-fetchJSON('./api/notes').then(noteList => {
+// On load, sync notes with server.
+fetchJSON('./api2/notes').then(noteList => {
   noteList.list.forEach((noteInfo, i) => {
     syncNote(noteInfo, i === 0 ? updateView : null)
   })
+  // FIXME: Push notes that only exist locally to server
 }).catch(handleErrors)
 
 // When user clicks left-hand index menu.
